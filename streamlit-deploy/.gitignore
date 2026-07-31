@@ -1,19 +1,7 @@
-# Python
 __pycache__/
 *.pyc
-*.pyo
 .venv/
 venv/
 .env
-
-# OS / editor cruft
 .DS_Store
-.idea/
-.vscode/
-
-# Streamlit
 .streamlit/secrets.toml
-
-# Build artifacts (commit only what's needed at runtime)
-*.bak
-*.tmp

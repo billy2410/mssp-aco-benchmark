@@ -1,0 +1,442 @@
+{
+  "data_vintage": "PY2024 PUF revised 2026-07-17",
+  "metric_definitions": [
+    {
+      "key": "savings_rate",
+      "label": "Savings Rate",
+      "source_col": "Sav_rate",
+      "unit": "%",
+      "higher_is_better": true,
+      "description": "Generated savings or losses as a percent of the updated benchmark.",
+      "family": "financial"
+    },
+    {
+      "key": "per_capita_exp",
+      "label": "Per-Capita Expenditure (Total PY)",
+      "source_col": "Per_Capita_Exp_TOTAL_PY",
+      "unit": "$",
+      "higher_is_better": false,
+      "description": "Total Medicare per-capita expenditure for assigned beneficiaries in the PY.",
+      "family": "financial"
+    },
+    {
+      "key": "quality_score",
+      "label": "Quality Score",
+      "source_col": "QualScore",
+      "unit": "%",
+      "higher_is_better": true,
+      "description": "Composite ACO quality score used to determine the final shared-savings payment.",
+      "family": "financial"
+    },
+    {
+      "key": "hcc_risk_py",
+      "label": "CMS-HCC Risk Score (AGND, PY)",
+      "source_col": "CMS_HCC_RiskScore_AGND_PY",
+      "unit": "score",
+      "higher_is_better": null,
+      "description": "CMS-HCC risk score for aged non-dual beneficiaries in the performance year.",
+      "family": "financial"
+    },
+    {
+      "key": "admits_per_1000",
+      "label": "All-Cause Inpatient Admits / 1000",
+      "source_col": "ADM",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "description": "Risk-adjusted inpatient admissions per 1,000 person-years.",
+      "family": "financial"
+    },
+    {
+      "key": "ed_visits_per_1000",
+      "label": "ED Visits / 1000",
+      "source_col": "P_EDV_Vis",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "description": "Emergency department visits per 1,000 person-years.",
+      "family": "financial"
+    },
+    {
+      "key": "snf_admits_per_1000",
+      "label": "SNF Admits / 1000",
+      "source_col": "P_SNF_ADM",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "description": "Skilled nursing facility admissions per 1,000 person-years.",
+      "family": "financial"
+    },
+    {
+      "key": "snf_los",
+      "label": "SNF Length of Stay (days)",
+      "source_col": "SNF_LOS",
+      "unit": "days",
+      "higher_is_better": false,
+      "description": "Average SNF length of stay.",
+      "family": "financial"
+    },
+    {
+      "key": "readmits_proxy",
+      "label": "30-day Readmission Risk-Std (Measure 479)",
+      "source_col": "Measure_479",
+      "unit": "%",
+      "higher_is_better": false,
+      "description": "All-cause unplanned admissions for patients with multiple chronic conditions.",
+      "family": "financial"
+    },
+    {
+      "key": "pct_dual",
+      "label": "Dual-Eligible %",
+      "source_col": "Perc_Dual",
+      "unit": "%",
+      "higher_is_better": null,
+      "description": "Percent of assigned beneficiaries who are dual-eligible.",
+      "family": "financial"
+    },
+    {
+      "key": "pct_lti",
+      "label": "Long-Term Institutionalized %",
+      "source_col": "Perc_LTI",
+      "unit": "%",
+      "higher_is_better": null,
+      "description": "Percent of assigned beneficiaries who are long-term institutionalized.",
+      "family": "financial"
+    },
+    {
+      "key": "benchmark_per_capita",
+      "label": "Updated Benchmark / Beneficiary",
+      "source_col": "UpdatedBnchmk",
+      "unit": "$",
+      "higher_is_better": null,
+      "description": "Per-capita updated benchmark used for the performance year.",
+      "family": "financial"
+    },
+    {
+      "key": "n_beneficiaries",
+      "label": "Assigned Beneficiaries",
+      "source_col": "N_AB",
+      "unit": "lives",
+      "higher_is_better": null,
+      "description": "Total number of assigned Medicare FFS beneficiaries.",
+      "family": "financial"
+    },
+    {
+      "key": "share_rate",
+      "label": "Final Share Rate",
+      "source_col": "FinalShareRate",
+      "unit": "%",
+      "higher_is_better": true,
+      "description": "Percentage of generated savings the ACO is eligible to keep.",
+      "family": "financial"
+    },
+    {
+      "key": "risk_ratio_by3_py",
+      "label": "Risk Score Ratio (BY3 \u2192 PY)",
+      "source_col": "risk_ratio_by3_py",
+      "unit": "ratio",
+      "higher_is_better": null,
+      "description": "Membership-weighted CMS-HCC risk score in the performance year divided by the membership-weighted risk score in benchmark year 3. Above 1.00 means documented risk grew relative to the benchmark period.",
+      "family": "financial"
+    },
+    {
+      "key": "expense_trend_by3_py",
+      "label": "Medical Expense Trend (BY3 \u2192 PY)",
+      "source_col": "expense_trend_by3_py",
+      "unit": "ratio",
+      "higher_is_better": false,
+      "description": "Membership-weighted per-capita expenditure in the performance year divided by the membership-weighted per-capita expenditure in benchmark year 3. Below 1.00 means per-capita cost fell relative to the benchmark period.",
+      "family": "financial"
+    },
+    {
+      "key": "final_adj",
+      "label": "Final Benchmark Adjustment / Beneficiary",
+      "source_col": "final_adj",
+      "unit": "$",
+      "higher_is_better": true,
+      "description": "The benchmark adjustment CMS actually applied \u2014 the regional adjustment or the prior savings adjustment, whichever CMS selected (per FinalAdjCat). Higher raises the benchmark.",
+      "family": "financial"
+    },
+    {
+      "key": "reg_adj",
+      "label": "Regional Adjustment / Beneficiary",
+      "source_col": "RegAdj",
+      "unit": "$",
+      "higher_is_better": true,
+      "description": "Regional efficiency adjustment to the benchmark, before CMS selects between it and the prior savings adjustment.",
+      "family": "financial"
+    },
+    {
+      "key": "prior_sav_adj",
+      "label": "Prior Savings Adjustment / Beneficiary",
+      "source_col": "PriorSavAdj",
+      "unit": "$",
+      "higher_is_better": true,
+      "description": "Credit for past program performance, before CMS selects between it and the regional adjustment.",
+      "family": "financial"
+    }
+  ],
+  "quality_measures": [
+    {
+      "key": "q_diabetes_hba1c_poor",
+      "label": "Diabetes: HbA1c Poor Control (>9%)",
+      "variants": [
+        "QualityID_001_WI",
+        "QualityID_001_eCQM",
+        "QualityID_001_MIPSCQM",
+        "QualityID_001_MedicareCQM"
+      ],
+      "domain": "Chronic disease",
+      "higher_is_better": false,
+      "description": "Percent of diabetic patients whose most recent HbA1c was greater than 9% or missing. An inverse measure \u2014 lower is better.",
+      "family": "quality"
+    },
+    {
+      "key": "q_bp_control",
+      "label": "Controlling High Blood Pressure",
+      "variants": [
+        "QualityID_236_WI",
+        "QualityID_236_eCQM",
+        "QualityID_236_MIPSCQM",
+        "QualityID_236_MedicareCQM"
+      ],
+      "domain": "Chronic disease",
+      "higher_is_better": true,
+      "description": "Percent of hypertensive patients whose blood pressure was adequately controlled.",
+      "family": "quality"
+    },
+    {
+      "key": "q_depression_screen",
+      "label": "Screening for Depression and Follow-Up Plan",
+      "variants": [
+        "QualityID_134_WI",
+        "QualityID_134_eCQM",
+        "QualityID_134_MIPSCQM",
+        "QualityID_134_MedicareCQM"
+      ],
+      "domain": "Behavioral health",
+      "higher_is_better": true,
+      "description": "Percent of patients screened for depression with a documented follow-up plan.",
+      "family": "quality"
+    },
+    {
+      "key": "q_depression_remission",
+      "label": "Depression Remission at Twelve Months",
+      "variants": [
+        "QualityID_370"
+      ],
+      "domain": "Behavioral health",
+      "higher_is_better": true,
+      "description": "Percent of patients with depression who reached remission at twelve months.",
+      "family": "quality"
+    },
+    {
+      "key": "q_falls_screen",
+      "label": "Falls: Screening for Future Fall Risk",
+      "variants": [
+        "QualityID_318"
+      ],
+      "domain": "Preventive care",
+      "higher_is_better": true,
+      "description": "Percent of patients aged 65+ screened for future fall risk.",
+      "family": "quality"
+    },
+    {
+      "key": "q_flu_immunization",
+      "label": "Preventive Care: Influenza Immunization",
+      "variants": [
+        "QualityID_110"
+      ],
+      "domain": "Preventive care",
+      "higher_is_better": true,
+      "description": "Percent of patients who received an influenza immunization.",
+      "family": "quality"
+    },
+    {
+      "key": "q_tobacco_screen",
+      "label": "Tobacco Use: Screening and Cessation Intervention",
+      "variants": [
+        "QualityID_226"
+      ],
+      "domain": "Preventive care",
+      "higher_is_better": true,
+      "description": "Percent of patients screened for tobacco use who received cessation intervention if needed.",
+      "family": "quality"
+    },
+    {
+      "key": "q_breast_cancer_screen",
+      "label": "Breast Cancer Screening",
+      "variants": [
+        "QualityID_112"
+      ],
+      "domain": "Cancer screening",
+      "higher_is_better": true,
+      "description": "Percent of women aged 50-74 screened for breast cancer.",
+      "family": "quality"
+    },
+    {
+      "key": "q_colorectal_screen",
+      "label": "Colorectal Cancer Screening",
+      "variants": [
+        "QualityID_113"
+      ],
+      "domain": "Cancer screening",
+      "higher_is_better": true,
+      "description": "Percent of patients aged 45-75 screened for colorectal cancer.",
+      "family": "quality"
+    },
+    {
+      "key": "q_statin_therapy",
+      "label": "Statin Therapy for CVD Prevention/Treatment",
+      "variants": [
+        "QualityID_438"
+      ],
+      "domain": "Chronic disease",
+      "higher_is_better": true,
+      "description": "Percent of eligible patients prescribed or on statin therapy.",
+      "family": "quality"
+    },
+    {
+      "key": "q_readmission",
+      "label": "All-Cause Unplanned Readmission (HWR)",
+      "variants": [
+        "Measure_479"
+      ],
+      "domain": "Utilization outcomes",
+      "higher_is_better": false,
+      "description": "Risk-standardized, hospital-wide, 30-day all-cause unplanned readmission rate. An inverse measure \u2014 lower is better.",
+      "family": "quality"
+    },
+    {
+      "key": "q_admissions_mcc",
+      "label": "Admissions for Patients with Multiple Chronic Conditions",
+      "variants": [
+        "Measure_484"
+      ],
+      "domain": "Utilization outcomes",
+      "higher_is_better": false,
+      "description": "Risk-standardized acute admission rate for patients with multiple chronic conditions. An inverse measure \u2014 lower is better.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_timely_care",
+      "label": "CAHPS: Getting Timely Care, Appointments, Information",
+      "variants": [
+        "CAHPS_1"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_communication",
+      "label": "CAHPS: How Well Providers Communicate",
+      "variants": [
+        "CAHPS_2"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_rating",
+      "label": "CAHPS: Patient's Rating of Provider",
+      "variants": [
+        "CAHPS_3"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_specialist_access",
+      "label": "CAHPS: Access to Specialists",
+      "variants": [
+        "CAHPS_4"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_health_promotion",
+      "label": "CAHPS: Health Promotion and Education",
+      "variants": [
+        "CAHPS_5"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_shared_decision",
+      "label": "CAHPS: Shared Decision Making",
+      "variants": [
+        "CAHPS_6"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_health_status",
+      "label": "CAHPS: Health Status and Functional Status",
+      "variants": [
+        "CAHPS_7"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_care_coordination",
+      "label": "CAHPS: Care Coordination",
+      "variants": [
+        "CAHPS_8"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_office_staff",
+      "label": "CAHPS: Courteous and Helpful Office Staff",
+      "variants": [
+        "CAHPS_9"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    },
+    {
+      "key": "q_cahps_stewardship",
+      "label": "CAHPS: Stewardship of Patient Resources",
+      "variants": [
+        "CAHPS_11"
+      ],
+      "domain": "Patient experience",
+      "higher_is_better": true,
+      "description": "CAHPS summary survey measure.",
+      "family": "quality"
+    }
+  ],
+  "methodology": {
+    "risk_ratio_by3_py": "Membership-weighted PY CMS-HCC risk score divided by membership-weighted BY3 risk score. PY weights use the published RR_weight_* fields; BY3 weights are derived from N_AB_Year_*_BY3 person-years because CMS does not publish RR_weight_*_BY3. Segments missing a score or a weight are excluded from both numerator and denominator.",
+    "expense_trend_by3_py": "Membership-weighted PY per-capita expenditure divided by membership-weighted BY3 per-capita expenditure, using Per_Capita_Exp_ALL_* weighted by N_AB_Year_* person-years for the matching period.",
+    "final_adj": "If FinalAdjCat is a Regional Adjustment, FinalAdj = RegAdj. If it is a Prior Savings Adjustment, FinalAdj = PriorSavAdj. Otherwise 0.",
+    "quality_coalescing": "Measures reported through multiple mechanisms (Web Interface, eCQM, MIPS CQM, Medicare CQM) are coalesced to a single value; each ACO reports through one.",
+    "inverse_measures": "HbA1c poor control, readmissions, and MCC admission rates are inverse: a lower value is better performance. Percentile ranks are reported on the raw value; presentation layers invert the language.",
+    "regional_peers": "Peer set = all ACOs sharing at least one service-area state, from the PY2024 ACO Participants file. Ranks are computed exactly from peer raw values."
+  },
+  "sources": {
+    "performance": "https://data.cms.gov/medicare-shared-savings-program/performance-year-financial-and-quality-results",
+    "participants": "https://data.cms.gov/medicare-shared-savings-program/accountable-care-organization-participants",
+    "data_dictionary": "https://data.cms.gov/resources/performance-year-financial-and-quality-results-data-dictionary"
+  }
+}
