@@ -67,7 +67,10 @@ if os.environ.get("APP_PASSWORD") and not st.session_state.get("_ok"):
 
 # ---------------------------------------------------------------- helpers
 def load_prompt(name: str) -> str:
-    return (PROMPTS / name).read_text()
+    """Load a prompt and splice in the shared MSSP context."""
+    txt = (PROMPTS / name).read_text()
+    shared = (PROMPTS / "_shared_context.md")
+    return txt.replace("{shared_context}", shared.read_text() if shared.exists() else "")
 
 
 def claude(prompt: str, max_tokens: int = 1100) -> str:
@@ -89,6 +92,7 @@ def fmt(v, unit):
     if unit == "lives": return f"{v:,.0f}"
     if unit == "days":  return f"{v:.1f}"
     if unit == "ratio": return f"{v:.4f}"
+    if unit == "pct_ratio": return f"{v * 100:.2f}%"
     if unit == "score": return f"{v:.3f}"
     if unit == "per 1k":return f"{v:,.0f}"
     return f"{v}"
@@ -105,12 +109,35 @@ def perf_pill(c: dict, higher_is_better) -> str:
 
 
 COHORT_LABELS = {"track": "Track", "risk_model": "Risk model", "rev_cat": "Revenue category",
-                 "size_band": "Size band", "all": "All ACOs", "regional": "Regional"}
+                 "size_band": "Size band", "all": "All ACOs", "regional": "Regional",
+                 "by3_vintage": "Same BY3 vintage"}
+
+# BY3-anchored metrics lead with the vintage-matched cohort; everything else
+# follows the user's selection.
+def preferred_for(metric: dict, focus: str | None):
+    if metric.get("vintage_sensitive"):
+        return ("by3_vintage", focus or "track", "regional", "rev_cat", "size_band", "all")
+    if focus:
+        return (focus, "track", "regional", "rev_cat", "size_band", "all")
+    return ("regional", "track", "rev_cat", "size_band", "all")
 
 
-def metric_card(m: dict, preferred=("regional", "track", "rev_cat", "size_band", "all")):
+def flag_pill(state: str) -> str:
+    cls = {"Yes": "p-good", "No": "p-bad"}.get(state, "p-neut")
+    return f'<span class="pill {cls}">{state}</span>'
+
+
+def flags_by_key(flags: list[dict]) -> dict:
+    return {f["key"]: f for f in (flags or [])}
+
+
+def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
+    if preferred is None:
+        preferred = preferred_for(m, focus)
     st.markdown(f'<div class="lbl">{m["label"]}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="big-num">{fmt(m["value"], m["unit"])}</div>', unsafe_allow_html=True)
+    if extra_badge:
+        st.markdown(extra_badge, unsafe_allow_html=True)
     pick = next((c for c in preferred if c in m["comparisons"]), None)
     if pick:
         c = m["comparisons"][pick]
@@ -146,10 +173,10 @@ tabs = st.tabs(["🔎 ACO Lookup", "🩺 Quality Performance", "📐 Benchmark M
                 "💬 Ask the Data", "📖 Methodology"])
 
 FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final_adj",
-             "quality_score", "per_capita_exp", "benchmark_per_capita", "share_rate",
-             "admits_per_1000", "ed_visits_per_1000", "readmits_proxy",
+             "n_beneficiaries", "quality_score", "per_capita_exp", "benchmark_per_capita",
+             "share_rate", "admits_per_1000", "ed_visits_per_1000", "readmits_proxy",
              "snf_admits_per_1000", "snf_los", "hcc_risk_py",
-             "reg_adj", "prior_sav_adj", "pct_dual", "pct_lti", "n_beneficiaries"]
+             "reg_adj", "prior_sav_adj", "pct_dual", "pct_lti"]
 
 
 def aco_picker(key: str):
@@ -174,14 +201,24 @@ def aco_picker(key: str):
 # ================================================================ TAB 1
 with tabs[0]:
     aco_id, py = aco_picker("lookup")
+    focus = st.radio(
+        "Compare against",
+        ["track", "regional", "rev_cat", "size_band", "all"],
+        format_func=lambda c: COHORT_LABELS.get(c, c),
+        horizontal=True, key="lookup_cohort",
+        help="Drives which cohort the cards and the narrative lead with. "
+             "The two BY3-anchored ratios always also show their same-vintage cohort.")
     if aco_id:
         rep = engine.benchmark_aco(aco_id, performance_year=py)
         a = rep["aco"]
+        fl = flags_by_key(a.get("quality_flags"))
         st.markdown(f"### {a['aco_name']}")
         bits = [f"**Track:** {a['track']}", f"**Revenue:** {a['rev_cat']}",
                 f"**Size:** {a['size_band']}", f"**Risk:** {a['risk_model']}"]
         if a["n_beneficiaries"]:
             bits.append(f"**Beneficiaries:** {int(a['n_beneficiaries']):,}")
+        if a.get("by3_vintage"):
+            bits.append(f"**{a['by3_vintage']}** ({py - int(a['by3_year'])}-yr window)")
         if a["service_area"]:
             bits.append(f"**Service area:** {', '.join(a['service_area'])}")
         if a["regional_peer_n"]:
@@ -190,20 +227,33 @@ with tabs[0]:
         if a.get("final_adj_type"):
             st.caption(f"CMS applied: {a['final_adj_type']}")
 
+        sel = rep["metrics"].get(focus)  # noqa: F841 (focus is a cohort key, not a metric)
         st.markdown("#### Headline actuarial KPIs")
         cols = st.columns(4)
         for i, k in enumerate(["savings_rate", "risk_ratio_by3_py",
                                "expense_trend_by3_py", "final_adj"]):
             with cols[i]:
-                metric_card(rep["metrics"][k])
+                metric_card(rep["metrics"][k], focus=focus)
 
         st.markdown("#### All metrics")
         rest = [k for k in FIN_ORDER if k in rep["metrics"]][4:]
         cols = st.columns(3)
         for i, k in enumerate(rest):
             with cols[i % 3]:
-                metric_card(rep["metrics"][k])
+                # Quality score carries its gate flag — the score alone misleads.
+                badge = ""
+                if k == "quality_score" and fl.get("Met_QPS"):
+                    q = fl["Met_QPS"]
+                    badge = (f'<span class="muted">Met Quality Performance Standard </span>'
+                             f'{flag_pill(q["state"])}')
+                metric_card(rep["metrics"][k], focus=focus, extra_badge=badge)
                 st.write("")
+
+        with st.expander("Quality determination flags — what drove the sharing rate"):
+            st.dataframe(pd.DataFrame([{
+                "Flag": f["label"], "Value": f["state"],
+                "Confidence": f["confidence"], "Meaning": f["description"],
+            } for f in a.get("quality_flags", [])]), hide_index=True, use_container_width=True)
 
         st.markdown("#### Narrative")
         uq = st.text_input("Optional — focus the narrative on a question",
@@ -212,11 +262,17 @@ with tabs[0]:
             if not os.environ.get("ANTHROPIC_API_KEY"):
                 st.error("Set ANTHROPIC_API_KEY to enable narrative generation.")
             else:
-                slim = {"aco": rep["aco"], "performance_year": rep["performance_year"],
+                focused = engine.focus_report(rep, focus)
+                slim = {"aco": focused["aco"], "performance_year": focused["performance_year"],
+                        "focus_cohort": focus,
                         "metrics": {k: {kk: vv for kk, vv in m.items() if kk != "source_col"}
-                                    for k, m in rep["metrics"].items()}}
+                                    for k, m in focused["metrics"].items()}}
                 prompt = load_prompt("narrative.md").format(
                     aco_name=a["aco_name"],
+                    focus_note=(f"The reader selected **{COHORT_LABELS.get(focus, focus)}** as the "
+                                f"comparison cohort. Anchor the analysis there. The two BY3-anchored "
+                                f"ratios also carry their same-vintage cohort — lead with that for "
+                                f"those two metrics."),
                     payload=json.dumps(slim, default=str)[:60000],
                     user_question=(f"The reader specifically asks: {uq}" if uq else ""))
                 with st.spinner("Generating…"):
@@ -240,6 +296,7 @@ with tabs[1]:
             st.warning("No quality data for this ACO.")
         else:
             c = qp["cohort"]
+            qfl = flags_by_key(qp["aco"].get("quality_flags"))
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Composite quality score", f'{qp["aco"]["quality_score"]:.2f}'
                       if qp["aco"]["quality_score"] else "—")
@@ -247,6 +304,22 @@ with tabs[1]:
             m3.metric("Below cohort median", len([x for x in qp["measures"]
                                                   if x["performance_pct"] < 50]))
             m4.metric("Peer cohort size", c["n_peers"])
+
+            # The gate matters more to the economics than the score does.
+            g1, g2 = st.columns(2)
+            for col, key, label in ((g1, "Met_QPS", "Met Quality Performance Standard"),
+                                    (g2, "Met_AltQPS", "Met Alternative Standard")):
+                f = qfl.get(key)
+                if f:
+                    with col:
+                        st.markdown(f'<div class="lbl">{label}</div>{flag_pill(f["state"])}',
+                                    unsafe_allow_html=True)
+            if qfl.get("Met_QPS", {}).get("value") == 0:
+                st.markdown('<div class="warnbox">This ACO missed the primary quality gate. '
+                            'Its sharing rate is reduced regardless of where individual measures '
+                            'rank — PY2024 median final share rate was 30.6% for ACOs in this '
+                            'position versus 50.0% for those that cleared it.</div>',
+                            unsafe_allow_html=True)
             if c["small_sample"]:
                 st.markdown('<div class="warnbox">Small peer cohort — treat these '
                             'comparisons as directional.</div>', unsafe_allow_html=True)
@@ -294,6 +367,9 @@ with tabs[1]:
                                file_name=f"quality_{aco_id_q}_{py_q}.csv", mime="text/csv")
 
             st.markdown("##### Quality coaching narrative")
+            quq = st.text_input("Optional — focus the narrative on a question",
+                                placeholder="e.g. What are the two cheapest measures to move "
+                                            "us above the quality gate?", key="qual_q")
             if st.button("Generate quality narrative", type="primary"):
                 if not os.environ.get("ANTHROPIC_API_KEY"):
                     st.error("Set ANTHROPIC_API_KEY to enable narrative generation.")
@@ -303,8 +379,10 @@ with tabs[1]:
                         cohort_label=f'{COHORT_LABELS.get(c["name"], c["name"])}: {c["value"]}',
                         cohort_n=c["n_peers"],
                         payload=json.dumps({"composite_quality_score": qp["aco"]["quality_score"],
+                                            "quality_flags": qp["aco"].get("quality_flags"),
                                             "domain_summary": qp["domain_summary"],
-                                            "measures": qp["measures"]}, default=str)[:60000])
+                                            "measures": qp["measures"]}, default=str)[:60000],
+                        user_question=(f"The reader specifically asks: {quq}" if quq else ""))
                     with st.spinner("Generating…"):
                         try:
                             st.markdown(claude(prompt))
@@ -378,10 +456,18 @@ with tabs[4]:
     st.markdown("### Methodology")
     st.markdown(f"**Data vintage:** {mm.get('data_vintage')}")
     st.markdown("#### Derived KPIs")
-    for k in ("risk_ratio_by3_py", "expense_trend_by3_py", "final_adj",
-              "quality_coalescing", "inverse_measures", "regional_peers"):
+    for k in ("risk_ratio_by3_py", "expense_trend_by3_py", "by3_vintage", "quality_cliff",
+              "final_adj", "quality_coalescing", "inverse_measures", "regional_peers"):
         if k in mm["methodology"]:
             st.markdown(f"**`{k}`** — {mm['methodology'][k]}")
+    st.markdown("#### Quality determination flags")
+    st.dataframe(pd.DataFrame([{
+        "Flag": f["label"], "Confidence": f["confidence"], "Meaning": f["description"],
+    } for f in mm.get("quality_flags", [])]), hide_index=True, use_container_width=True)
+    st.caption('Flags marked "verify" are readings inferred from the published data '
+               "relationships; confirm against the CMS data dictionary before asserting "
+               "them to a client.")
+
     st.markdown("#### Quality measures")
     st.dataframe(pd.DataFrame([{
         "Measure": q["label"], "Domain": q["domain"],

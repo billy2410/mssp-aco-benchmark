@@ -96,11 +96,11 @@ METRICS = [
     ("share_rate", "Final Share Rate", "FinalShareRate", "%", True,
      "Percentage of generated savings the ACO is eligible to keep."),
     # ---- v2 derived KPIs (source_col is the derived column name) ----
-    ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)", "risk_ratio_by3_py", "ratio", None,
+    ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)", "risk_ratio_by3_py", "pct_ratio", None,
      "Membership-weighted CMS-HCC risk score in the performance year divided by the "
      "membership-weighted risk score in benchmark year 3. Above 1.00 means documented "
      "risk grew relative to the benchmark period."),
-    ("expense_trend_by3_py", "Medical Expense Trend (BY3 → PY)", "expense_trend_by3_py", "ratio",
+    ("expense_trend_by3_py", "Medical Expense Trend (BY3 → PY)", "expense_trend_by3_py", "pct_ratio",
      False, "Membership-weighted per-capita expenditure in the performance year divided by "
      "the membership-weighted per-capita expenditure in benchmark year 3. Below 1.00 means "
      "per-capita cost fell relative to the benchmark period."),
@@ -195,6 +195,61 @@ QUALITY_MEASURES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Metrics anchored to Benchmark Year 3. Their level depends on how many years
+# separate BY3 from the performance year, so they must be compared only against
+# ACOs with the same BY3 vintage. Median expense trend runs 1.07 at a one-year
+# gap versus 1.19 at three years — pooling them inverts rankings.
+# ---------------------------------------------------------------------------
+VINTAGE_SENSITIVE = {"risk_ratio_by3_py", "expense_trend_by3_py"}
+
+
+# ---------------------------------------------------------------------------
+# Quality determination flags.
+#
+# MSSP quality is a CLIFF, not a slider. Met_QPS decides whether an ACO earns
+# its track's full sharing rate. In PY2024, median final share rate was 50.0%
+# for ACOs meeting the standard versus 30.6% for those that did not.
+#
+# confidence: "high" = corroborated by the published data relationships below;
+# "verify" = plausible reading that should be checked against the CMS data
+# dictionary before being asserted to a client.
+# ---------------------------------------------------------------------------
+QUALITY_FLAGS = [
+    ("Met_QPS", "Met Quality Performance Standard",
+     "The primary quality gate. Meeting it makes the ACO eligible for its track's maximum "
+     "sharing rate. PY2024: 447 of 476 ACOs met it; median final share rate was 50.0% for "
+     "those that did versus 30.6% for those that did not.", "high"),
+    ("Met_AltQPS", "Met Alternative Quality Performance Standard",
+     "Second-chance path, evaluated only when Met_QPS = 0. In PY2024 it is populated for "
+     "exactly the 29 ACOs that missed the primary standard, and all 29 met it — so the "
+     "practical effect is a reduced, scaled sharing rate rather than forfeiture.", "high"),
+    ("Met_40pctl", "Met 40th-percentile quality threshold",
+     "The main route to the quality performance standard. Every ACO that missed the QPS also "
+     "missed this threshold. 57 ACOs met the QPS without it, mostly via first-year "
+     "reporting flexibility.", "high"),
+    ("Met_FirstYear", "First performance year in agreement",
+     "First-year ACOs satisfy the standard by reporting rather than by score. This is why a "
+     "quality score as low as 34.29 can still show Met_QPS = 1.", "high"),
+    ("Met_SSP_quality_reporting_requirements", "Met SSP quality reporting requirements",
+     "Baseline reporting compliance. 471 of 476 ACOs met it in PY2024; failing it is a "
+     "serious operational red flag independent of score.", "high"),
+    ("Report_WI", "Reported via CMS Web Interface",
+     "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.", "high"),
+    ("Report_eCQM_CQM_MedicareCQM", "Reported via eCQM / MIPS CQM / Medicare CQM",
+     "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.", "high"),
+    ("Met_Incentive", "Qualified for a quality incentive adjustment",
+     "122 ACOs in PY2024, all of which also met the QPS. Their median quality score (79.69) "
+     "sits below that of non-recipients (83.89), consistent with an adjustment that supports "
+     "ACOs serving higher-need populations. Confirm the exact basis in the data dictionary "
+     "before asserting it to a client.", "verify"),
+    ("Recvd40p", "Received 40th-percentile treatment",
+     "35 ACOs in PY2024, all of which also met the 40th-percentile threshold, with a median "
+     "quality score of 77.05 — right at the cliff boundary. Exact meaning should be confirmed "
+     "against the data dictionary.", "verify"),
+]
+
+
 COHORT_DEFS = {
     "track": lambda r: {
         "A": "BASIC-A", "B": "BASIC-B", "C": "BASIC-C",
@@ -203,6 +258,7 @@ COHORT_DEFS = {
     "risk_model": lambda r: r.get("Risk_Model"),
     "rev_cat": lambda r: r.get("Rev_Exp_Cat"),
     "size_band": lambda r: _size_band(r.get("N_AB")),
+    "by3_vintage": lambda r: r.get("by3_vintage"),
     "all": lambda r: "All ACOs",
 }
 
@@ -310,11 +366,33 @@ def add_derived_kpis(df: pd.DataFrame) -> pd.DataFrame:
     final = final.mask(cat.str.contains("regional", na=False), reg)
     final = final.mask(cat.str.contains("prior", na=False), psa)
     final = final.fillna(0.0)
+    # --- 4. BY3 vintage -----------------------------------------------------
+    # Benchmark years are the three years preceding the current agreement
+    # period, so BY3 is the year before the agreement start. The gap between
+    # BY3 and the performance year drives the level of both BY3-anchored
+    # ratios, which is why they get their own peer cohort.
+    start = pd.to_datetime(df.get("Current_Start_Date"), errors="coerce")
+    df["by3_year"] = (start.dt.year - 1).astype("Int64")
+    py = int(df["performance_year"].iloc[0]) if "performance_year" in df.columns else None
+    df["by3_vintage"] = df["by3_year"].apply(
+        lambda y: f"BY3 {int(y)}" if pd.notna(y) else None)
+
     df["final_adj"] = final
     df["final_adj_type"] = (
         df["FinalAdjCat"].astype(str).str.strip() if "FinalAdjCat" in df.columns
         else pd.Series("Not published", index=df.index)
     )
+    return df
+
+
+def add_quality_flags(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize the quality determination flags to 1 / 0 / None."""
+    df = df.copy()
+    for col, *_ in QUALITY_FLAGS:
+        if col in df.columns:
+            df[col] = df[col].apply(_to_num)
+        else:
+            df[col] = np.nan
     return df
 
 
@@ -402,8 +480,13 @@ def build_meta() -> dict:
         "data_vintage": DATA_VINTAGE,
         "metric_definitions": [
             {"key": k, "label": l, "source_col": src, "unit": u,
-             "higher_is_better": h, "description": d, "family": "financial"}
+             "higher_is_better": h, "description": d, "family": "financial",
+             "vintage_sensitive": k in VINTAGE_SENSITIVE}
             for (k, l, src, u, h, d) in METRICS
+        ],
+        "quality_flags": [
+            {"key": k, "label": l, "description": d, "confidence": c}
+            for (k, l, d, c) in QUALITY_FLAGS
         ],
         "quality_measures": [
             {"key": k, "label": l, "variants": v, "domain": dom,
@@ -431,6 +514,18 @@ def build_meta() -> dict:
                 "HbA1c poor control, readmissions, and MCC admission rates are inverse: a lower "
                 "value is better performance. Percentile ranks are reported on the raw value; "
                 "presentation layers invert the language.",
+            "by3_vintage":
+                "BY3 is the year before the current agreement period start, so the gap between "
+                "BY3 and the performance year varies from one to six years across ACOs. Because "
+                "both BY3-anchored ratios accumulate drift over that gap (PY2024 median expense "
+                "trend: 1.07 at a one-year gap versus 1.19 at three years), those two metrics are "
+                "additionally compared against ACOs sharing the same BY3 vintage. No other metric "
+                "uses this cohort.",
+            "quality_cliff":
+                "MSSP quality is a threshold, not a slider. Met_QPS determines eligibility for the "
+                "track's full sharing rate; ACOs missing it fall to the alternative standard and a "
+                "reduced scaled rate. PY2024 median final share rate: 50.0 percent for ACOs meeting "
+                "the standard, 30.6 percent for those that did not.",
             "regional_peers":
                 "Peer set = all ACOs sharing at least one service-area state, from the PY2024 "
                 "ACO Participants file. Ranks are computed exactly from peer raw values.",
@@ -461,10 +556,10 @@ def main():
                 df[col] = df[col].astype(str).str.strip()
 
     print("Computing derived KPIs...")
-    df24 = add_quality_measures(add_derived_kpis(df24))
-    df23 = add_quality_measures(add_derived_kpis(df23))
     df24["performance_year"] = 2024
     df23["performance_year"] = 2023
+    df24 = add_quality_flags(add_quality_measures(add_derived_kpis(df24)))
+    df23 = add_quality_flags(add_quality_measures(add_derived_kpis(df23)))
     print(f"  PY2024: {len(df24):,} ACOs   PY2023: {len(df23):,} ACOs")
     for k in ("risk_ratio_by3_py", "expense_trend_by3_py", "final_adj"):
         print(f"    {k}: {df24[k].notna().sum()}/{len(df24)} populated")
@@ -507,7 +602,8 @@ def main():
     print("Building per-ACO browser index...")
     base_cols = ["ACO_ID", "ACO_Name", "Current_Track", "Risk_Model", "Rev_Exp_Cat",
                  "N_AB", "Agreement_Period_Num", "Current_Start_Date", "EarnSaveLoss",
-                 "final_adj_type"]
+                 "final_adj_type", "by3_year", "by3_vintage"]
+    base_cols += [c for c, *_ in QUALITY_FLAGS]
     needed = base_cols + [src for _k, _l, src, _u, _h, _d in METRICS] + [k for k, *_ in QUALITY_MEASURES]
 
     def clean(v):

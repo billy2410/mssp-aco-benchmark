@@ -8,7 +8,8 @@
       "unit": "%",
       "higher_is_better": true,
       "description": "Generated savings or losses as a percent of the updated benchmark.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "per_capita_exp",
@@ -17,7 +18,8 @@
       "unit": "$",
       "higher_is_better": false,
       "description": "Total Medicare per-capita expenditure for assigned beneficiaries in the PY.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "quality_score",
@@ -26,7 +28,8 @@
       "unit": "%",
       "higher_is_better": true,
       "description": "Composite ACO quality score used to determine the final shared-savings payment.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "hcc_risk_py",
@@ -35,7 +38,8 @@
       "unit": "score",
       "higher_is_better": null,
       "description": "CMS-HCC risk score for aged non-dual beneficiaries in the performance year.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "admits_per_1000",
@@ -44,7 +48,8 @@
       "unit": "per 1k",
       "higher_is_better": false,
       "description": "Risk-adjusted inpatient admissions per 1,000 person-years.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "ed_visits_per_1000",
@@ -53,7 +58,8 @@
       "unit": "per 1k",
       "higher_is_better": false,
       "description": "Emergency department visits per 1,000 person-years.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "snf_admits_per_1000",
@@ -62,7 +68,8 @@
       "unit": "per 1k",
       "higher_is_better": false,
       "description": "Skilled nursing facility admissions per 1,000 person-years.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "snf_los",
@@ -71,7 +78,8 @@
       "unit": "days",
       "higher_is_better": false,
       "description": "Average SNF length of stay.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "readmits_proxy",
@@ -80,7 +88,8 @@
       "unit": "%",
       "higher_is_better": false,
       "description": "All-cause unplanned admissions for patients with multiple chronic conditions.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "pct_dual",
@@ -89,7 +98,8 @@
       "unit": "%",
       "higher_is_better": null,
       "description": "Percent of assigned beneficiaries who are dual-eligible.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "pct_lti",
@@ -98,7 +108,8 @@
       "unit": "%",
       "higher_is_better": null,
       "description": "Percent of assigned beneficiaries who are long-term institutionalized.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "benchmark_per_capita",
@@ -107,7 +118,8 @@
       "unit": "$",
       "higher_is_better": null,
       "description": "Per-capita updated benchmark used for the performance year.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "n_beneficiaries",
@@ -116,7 +128,8 @@
       "unit": "lives",
       "higher_is_better": null,
       "description": "Total number of assigned Medicare FFS beneficiaries.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "share_rate",
@@ -125,25 +138,28 @@
       "unit": "%",
       "higher_is_better": true,
       "description": "Percentage of generated savings the ACO is eligible to keep.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "risk_ratio_by3_py",
       "label": "Risk Score Ratio (BY3 \u2192 PY)",
       "source_col": "risk_ratio_by3_py",
-      "unit": "ratio",
+      "unit": "pct_ratio",
       "higher_is_better": null,
       "description": "Membership-weighted CMS-HCC risk score in the performance year divided by the membership-weighted risk score in benchmark year 3. Above 1.00 means documented risk grew relative to the benchmark period.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": true
     },
     {
       "key": "expense_trend_by3_py",
       "label": "Medical Expense Trend (BY3 \u2192 PY)",
       "source_col": "expense_trend_by3_py",
-      "unit": "ratio",
+      "unit": "pct_ratio",
       "higher_is_better": false,
       "description": "Membership-weighted per-capita expenditure in the performance year divided by the membership-weighted per-capita expenditure in benchmark year 3. Below 1.00 means per-capita cost fell relative to the benchmark period.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": true
     },
     {
       "key": "final_adj",
@@ -152,7 +168,8 @@
       "unit": "$",
       "higher_is_better": true,
       "description": "The benchmark adjustment CMS actually applied \u2014 the regional adjustment or the prior savings adjustment, whichever CMS selected (per FinalAdjCat). Higher raises the benchmark.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "reg_adj",
@@ -161,7 +178,8 @@
       "unit": "$",
       "higher_is_better": true,
       "description": "Regional efficiency adjustment to the benchmark, before CMS selects between it and the prior savings adjustment.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
     },
     {
       "key": "prior_sav_adj",
@@ -170,7 +188,64 @@
       "unit": "$",
       "higher_is_better": true,
       "description": "Credit for past program performance, before CMS selects between it and the regional adjustment.",
-      "family": "financial"
+      "family": "financial",
+      "vintage_sensitive": false
+    }
+  ],
+  "quality_flags": [
+    {
+      "key": "Met_QPS",
+      "label": "Met Quality Performance Standard",
+      "description": "The primary quality gate. Meeting it makes the ACO eligible for its track's maximum sharing rate. PY2024: 447 of 476 ACOs met it; median final share rate was 50.0% for those that did versus 30.6% for those that did not.",
+      "confidence": "high"
+    },
+    {
+      "key": "Met_AltQPS",
+      "label": "Met Alternative Quality Performance Standard",
+      "description": "Second-chance path, evaluated only when Met_QPS = 0. In PY2024 it is populated for exactly the 29 ACOs that missed the primary standard, and all 29 met it \u2014 so the practical effect is a reduced, scaled sharing rate rather than forfeiture.",
+      "confidence": "high"
+    },
+    {
+      "key": "Met_40pctl",
+      "label": "Met 40th-percentile quality threshold",
+      "description": "The main route to the quality performance standard. Every ACO that missed the QPS also missed this threshold. 57 ACOs met the QPS without it, mostly via first-year reporting flexibility.",
+      "confidence": "high"
+    },
+    {
+      "key": "Met_FirstYear",
+      "label": "First performance year in agreement",
+      "description": "First-year ACOs satisfy the standard by reporting rather than by score. This is why a quality score as low as 34.29 can still show Met_QPS = 1.",
+      "confidence": "high"
+    },
+    {
+      "key": "Met_SSP_quality_reporting_requirements",
+      "label": "Met SSP quality reporting requirements",
+      "description": "Baseline reporting compliance. 471 of 476 ACOs met it in PY2024; failing it is a serious operational red flag independent of score.",
+      "confidence": "high"
+    },
+    {
+      "key": "Report_WI",
+      "label": "Reported via CMS Web Interface",
+      "description": "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.",
+      "confidence": "high"
+    },
+    {
+      "key": "Report_eCQM_CQM_MedicareCQM",
+      "label": "Reported via eCQM / MIPS CQM / Medicare CQM",
+      "description": "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.",
+      "confidence": "high"
+    },
+    {
+      "key": "Met_Incentive",
+      "label": "Qualified for a quality incentive adjustment",
+      "description": "122 ACOs in PY2024, all of which also met the QPS. Their median quality score (79.69) sits below that of non-recipients (83.89), consistent with an adjustment that supports ACOs serving higher-need populations. Confirm the exact basis in the data dictionary before asserting it to a client.",
+      "confidence": "verify"
+    },
+    {
+      "key": "Recvd40p",
+      "label": "Received 40th-percentile treatment",
+      "description": "35 ACOs in PY2024, all of which also met the 40th-percentile threshold, with a median quality score of 77.05 \u2014 right at the cliff boundary. Exact meaning should be confirmed against the data dictionary.",
+      "confidence": "verify"
     }
   ],
   "quality_measures": [
@@ -432,6 +507,8 @@
     "final_adj": "If FinalAdjCat is a Regional Adjustment, FinalAdj = RegAdj. If it is a Prior Savings Adjustment, FinalAdj = PriorSavAdj. Otherwise 0.",
     "quality_coalescing": "Measures reported through multiple mechanisms (Web Interface, eCQM, MIPS CQM, Medicare CQM) are coalesced to a single value; each ACO reports through one.",
     "inverse_measures": "HbA1c poor control, readmissions, and MCC admission rates are inverse: a lower value is better performance. Percentile ranks are reported on the raw value; presentation layers invert the language.",
+    "by3_vintage": "BY3 is the year before the current agreement period start, so the gap between BY3 and the performance year varies from one to six years across ACOs. Because both BY3-anchored ratios accumulate drift over that gap (PY2024 median expense trend: 1.07 at a one-year gap versus 1.19 at three years), those two metrics are additionally compared against ACOs sharing the same BY3 vintage. No other metric uses this cohort.",
+    "quality_cliff": "MSSP quality is a threshold, not a slider. Met_QPS determines eligibility for the track's full sharing rate; ACOs missing it fall to the alternative standard and a reduced scaled rate. PY2024 median final share rate: 50.0 percent for ACOs meeting the standard, 30.6 percent for those that did not.",
     "regional_peers": "Peer set = all ACOs sharing at least one service-area state, from the PY2024 ACO Participants file. Ranks are computed exactly from peer raw values."
   },
   "sources": {
