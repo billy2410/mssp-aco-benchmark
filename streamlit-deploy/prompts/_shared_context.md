@@ -44,9 +44,21 @@ Other flags, when present in the payload:
   independent of score.
 - `Report_WI` / `Report_eCQM_CQM_MedicareCQM` — which mechanism the ACO
   reported through. Scores are not perfectly comparable across mechanisms.
-- `Met_Incentive` and `Recvd40p` — carry `confidence: "verify"` in the
-  payload. Report the Yes/No value if asked, but do not build an argument on
-  their meaning.
+- `Met_Incentive` — the **eCQM/MIPS CQM reporting incentive**, confirmed
+  against the CMS data dictionary. An ACO qualifies by reporting all three
+  eCQMs/MIPS CQMs, meeting MIPS data completeness on all three, and scoring at
+  or above the 10th percentile on at least one of the four APP outcome
+  measures and at or above the 40th percentile on at least one of the
+  remaining five. It does not apply to Medicare CQMs. Critically, eligibility
+  is determined **independently of the measures that feed the quality score**,
+  so this flag says nothing about quality performance. Do not use it to
+  explain a good or bad quality result.
+- `Recvd40p` — an **extreme and uncontrollable circumstances** adjustment. When
+  an ACO is determined to be affected by an EUC, its quality score is set to
+  the higher of its own score or the equivalent of the 40th-percentile MIPS
+  quality performance category score. It reflects a disaster adjustment, not
+  ACO performance, and is uncommon by design. Report it only if directly
+  asked; never offer it as an explanation for a quality result.
 
 ## BY3-anchored metrics need a vintage-matched comparison
 
@@ -66,6 +78,33 @@ read and treat the pooled cohorts as secondary.** If they disagree, say so
 plainly — that disagreement is usually an artifact of vintage, not
 performance. No other metric uses this cohort, because no other metric is
 anchored to BY3.
+
+## Cost and utilization are two-sided more often than they look
+
+Cost and utilization metrics carry a `two_sided: true` flag when reducing them
+is not automatically the goal. These are ranked and given a percentile, but a
+percentile on a two-sided metric is a **description, not a verdict**. Do not
+call a high value a gap or a low value a win.
+
+The two-sided categories and why:
+
+- **Physician / professional spend, all E&M, primary-care E&M, specialist
+  E&M, nurse practitioner and FQHC/RHC visits.** Raising ambulatory contact is
+  the usual mechanism by which an ACO drives admissions and ED visits down.
+  High values here alongside low acute utilization is the pattern of a
+  well-functioning ACO, not overuse.
+- **Home health.** Frequently substitutes for more expensive SNF days. Read it
+  next to SNF spend and SNF discharges, never alone.
+- **Hospice.** Higher hospice spend often reflects appropriate end-of-life
+  care displacing aggressive inpatient utilization.
+
+The analytically useful move is to read these **in pairs**: high primary care
+plus low admissions is a substitution story; high primary care plus high
+admissions is a genuine cost problem. Say which one the data supports.
+
+Expense trend must also be read against risk-score growth. An ACO whose
+per-capita cost grew 6% while documented risk grew 8% is not deteriorating.
+Both ratios are in the payload when available — compare them.
 
 ## Reading the numbers
 

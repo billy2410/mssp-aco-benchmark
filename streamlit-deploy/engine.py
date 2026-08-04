@@ -72,9 +72,10 @@ def meta() -> dict:
 
 
 METRIC_DEFS = {m["key"]: m for m in meta()["metric_definitions"]}
+EXPENSE_DEFS = {m["key"]: m for m in meta().get("expense_metrics", [])}
 QUALITY_FLAG_DEFS = {f["key"]: f for f in meta().get("quality_flags", [])}
 QUALITY_DEFS = {m["key"]: m for m in meta()["quality_measures"]}
-ALL_DEFS = {**METRIC_DEFS, **QUALITY_DEFS}
+ALL_DEFS = {**METRIC_DEFS, **EXPENSE_DEFS, **QUALITY_DEFS}
 
 _TRACK_MAP = {"A": "BASIC-A", "B": "BASIC-B", "C": "BASIC-C",
               "D": "BASIC-D", "E": "BASIC-E", "EN": "ENHANCED"}
@@ -265,6 +266,25 @@ def _peer_rows(cohort_name: str, cohort_value, rows: list[dict],
 # ---------------------------------------------------------------------------
 # Financial benchmark
 # ---------------------------------------------------------------------------
+UNAVAILABLE_BY_YEAR = meta().get("unavailable_by_year", {})
+
+
+def unavailable_note(key: str, performance_year: int, value) -> str | None:
+    """Why a metric has no value — or None when it does.
+
+    A bare dash conflates three different situations. CMS not publishing a
+    field for a whole performance year is a statement about the program; the
+    field not applying to one ACO is a statement about that ACO; and a
+    suppressed cell is a statement about cohort size. Callers render the
+    distinction rather than showing an ambiguous placeholder.
+    """
+    if value is not None:
+        return None
+    if key in UNAVAILABLE_BY_YEAR.get(f"PY{performance_year}", []):
+        return f"Not published by CMS for PY{performance_year}"
+    return "Not applicable to this ACO"
+
+
 def benchmark_aco(aco_id: str, performance_year: int = 2024,
                   include_regional: bool = True) -> dict | None:
     row = get_aco(aco_id, performance_year)
@@ -295,7 +315,8 @@ def benchmark_aco(aco_id: str, performance_year: int = 2024,
             if cname in ("regional", "by3_vintage"):
                 r["small_sample"] = r["cohort_n"] < MIN_REGIONAL_N
             comparisons[cname] = {"cohort_value": cvalue, **r}
-        metric_results[key] = {**mdef, "value": value, "comparisons": comparisons}
+        metric_results[key] = {**mdef, "value": value, "comparisons": comparisons,
+                               "unavailable": unavailable_note(key, performance_year, value)}
 
     return {
         "aco": {
@@ -399,6 +420,67 @@ def quality_profile(aco_id: str, cohort: str = "track",
         "biggest_gaps": gaps[:5],
         "top_strengths": list(reversed(strengths[-5:])),
         "domain_summary": domain_summary,
+    }
+
+
+def expense_profile(aco_id: str, cohort: str = "track",
+                    performance_year: int = 2024) -> dict | None:
+    """Cost and utilization metrics ranked against one cohort.
+
+    Deliberately mirrors quality_profile's cohort resolution so that the
+    "Compare Against" control behaves identically on every tab.
+
+    Metrics whose higher_is_better is None are two-sided: they are ranked and
+    their percentile is reported, but they are kept out of strengths/gaps,
+    because calling a high primary-care visit rate a "gap" would invert the
+    actual value-based reading.
+    """
+    row = get_aco(aco_id, performance_year)
+    if not row:
+        return None
+    rows = aco_index().get(f"PY{performance_year}", [])
+    labels = cohort_labels_for_row(row)
+    cvalue = regional_label(aco_id) if cohort == "regional" else labels.get(cohort)
+    if cohort != "regional" and not cvalue:
+        cohort, cvalue = "all", "All ACOs"
+    peers = _peer_rows(cohort, cvalue, rows, subject_id=aco_id)
+
+    cost, utilization = [], []
+    for key, mdef in EXPENSE_DEFS.items():
+        src = mdef.get("source_col", key)
+        value = _num(row.get(src, row.get(key)))
+        pvals = [_num(p.get(src, p.get(key))) for p in peers]
+        r = _rank_exact(value, pvals, mdef["higher_is_better"])
+        rec = {**mdef, "value": value, **r,
+               "two_sided": mdef["higher_is_better"] is None}
+        (cost if mdef["family"] == "cost" else utilization).append(rec)
+
+    directional = [m for m in cost + utilization
+                   if m["performance_pct"] is not None and not m["two_sided"]]
+    directional.sort(key=lambda m: m["performance_pct"])
+
+    def _order(items):
+        # Important metrics first (they render as cards), then by percentile so
+        # the worst-performing rows surface at the top of the expandable table.
+        return sorted(items, key=lambda m: (not m.get("important"),
+                                            m["performance_pct"]
+                                            if m["performance_pct"] is not None else 999))
+
+    return {
+        "aco": {"aco_id": row["ACO_ID"], "aco_name": row["ACO_Name"],
+                "track": labels["track"], "size_band": labels["size_band"],
+                "n_beneficiaries": row.get("N_AB"),
+                "per_capita_exp": _num(row.get("Per_Capita_Exp_TOTAL_PY")),
+                "expense_trend_by3_py": _num(row.get("expense_trend_by3_py")),
+                "risk_ratio_by3_py": _num(row.get("risk_ratio_by3_py"))},
+        "cohort": {"name": cohort, "value": cvalue, "n_peers": len(peers),
+                   "small_sample": len(peers) < MIN_REGIONAL_N},
+        "performance_year": performance_year,
+        "data_vintage": meta().get("data_vintage"),
+        "cost": _order(cost),
+        "utilization": _order(utilization),
+        "biggest_gaps": directional[:5],
+        "top_strengths": list(reversed(directional[-5:])),
     }
 
 

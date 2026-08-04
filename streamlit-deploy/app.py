@@ -49,6 +49,7 @@ st.markdown("""
   .muted{color:#64748b;font-size:.83rem}
   .src{color:#94a3b8;font-size:.76rem;border-top:1px solid #e2e8f0;padding-top:10px;margin-top:22px}
   .warnbox{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#92400e}
+  .okbox{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#065f46}
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,6 +139,13 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
     st.markdown(f'<div class="big-num">{fmt(m["value"], m["unit"])}</div>', unsafe_allow_html=True)
     if extra_badge:
         st.markdown(extra_badge, unsafe_allow_html=True)
+    # A value-less card explains itself rather than showing a bare dash.
+    if m.get("unavailable"):
+        st.markdown(f'<span class="muted">{m["unavailable"]}</span>',
+                    unsafe_allow_html=True)
+        with st.expander("Cohort detail"):
+            st.caption(m["description"])
+        return
     pick = next((c for c in preferred if c in m["comparisons"]), None)
     if pick:
         c = m["comparisons"][pick]
@@ -159,23 +167,28 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
                 "p75": fmt(c.get("cohort_p75"), m["unit"]),
                 "Performance": f'p{c["performance_pct"]:.0f}' if c.get("performance_pct") is not None else "—",
             })
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
         st.caption(m["description"])
 
 
 # ---------------------------------------------------------------- header
 st.title("ACO Benchmark")
-vint = engine.meta().get("data_vintage", "")
+_meta = engine.meta()
+vint = _meta.get("data_vintage", "")
+build = _meta.get("build_id", "unknown")
 st.caption(f"Medicare Shared Savings Program performance and quality benchmarking · {vint} · "
            "public CMS data only")
+# Deployment tell-tale: if this timestamp is older than your last data build,
+# the running instance is serving stale data files.
+st.caption(f"Data build: {build}")
 
-tabs = st.tabs(["🔎 ACO Lookup", "🩺 Quality Performance", "📐 Benchmark My Numbers",
-                "💬 Ask the Data", "📖 Methodology"])
+tabs = st.tabs(["🔎 ACO Lookup", "🩺 Quality Performance", "💵 Medical Expense Performance",
+                "📐 Benchmark My Numbers", "💬 Ask the Data", "📖 Methodology"])
 
 FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final_adj",
              "n_beneficiaries", "quality_score", "per_capita_exp", "benchmark_per_capita",
-             "share_rate", "admits_per_1000", "ed_visits_per_1000", "readmits_proxy",
-             "snf_admits_per_1000", "snf_los", "hcc_risk_py",
+             "share_rate", "admits_per_1000", "ed_visits_per_1000", "pc_services_per_1000",
+             "readmits_proxy", "snf_admits_per_1000", "snf_los", "hcc_risk_py",
              "reg_adj", "prior_sav_adj", "pct_dual", "pct_lti"]
 
 
@@ -253,7 +266,7 @@ with tabs[0]:
             st.dataframe(pd.DataFrame([{
                 "Flag": f["label"], "Value": f["state"],
                 "Confidence": f["confidence"], "Meaning": f["description"],
-            } for f in a.get("quality_flags", [])]), hide_index=True, use_container_width=True)
+            } for f in a.get("quality_flags", [])]), hide_index=True, width='stretch')
 
         st.markdown("#### Narrative")
         uq = st.text_input("Optional — focus the narrative on a question",
@@ -347,7 +360,7 @@ with tabs[1]:
             st.markdown("##### Performance by domain")
             dd = pd.DataFrame(qp["domain_summary"])
             dd.columns = ["Domain", "Avg performance percentile", "Measures"]
-            st.dataframe(dd, hide_index=True, use_container_width=True)
+            st.dataframe(dd, hide_index=True, width='stretch')
 
             st.markdown("##### All measures")
             rows = [{
@@ -361,7 +374,7 @@ with tabs[1]:
                 "Performance": round(mm["performance_pct"], 1),
                 "n": mm["cohort_n"],
             } for mm in qp["measures"]]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
             st.download_button("Download quality detail (CSV)",
                                pd.DataFrame(rows).to_csv(index=False),
                                file_name=f"quality_{aco_id_q}_{py_q}.csv", mime="text/csv")
@@ -391,6 +404,144 @@ with tabs[1]:
 
 # ================================================================ TAB 3
 with tabs[2]:
+    st.markdown("### Medical expense performance")
+    st.caption("Per-capita cost and utilization ranked against a peer cohort. "
+               "Metrics marked two-sided are ranked but not scored good or bad — "
+               "raising ambulatory contact is often how acute utilization comes down.")
+    aco_id_e, py_e = aco_picker("expense")
+    cohort_e = st.radio("Compare against", ["track", "regional", "rev_cat", "size_band", "all"],
+                        format_func=lambda c: COHORT_LABELS.get(c, c),
+                        horizontal=True, key="ecohort")
+    if aco_id_e:
+        ep = engine.expense_profile(aco_id_e, cohort=cohort_e, performance_year=py_e)
+        if not ep:
+            st.warning("No expense data for this ACO.")
+        else:
+            c = ep["cohort"]
+            a = ep["aco"]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total per-capita expenditure",
+                      fmt(a["per_capita_exp"], "$"))
+            m2.metric("Expense trend (BY3 → PY)",
+                      fmt(a["expense_trend_by3_py"], "pct_ratio"))
+            m3.metric("Risk score ratio (BY3 → PY)",
+                      fmt(a["risk_ratio_by3_py"], "pct_ratio"))
+            m4.metric("Peer cohort size", c["n_peers"])
+
+            # Cost trend read in isolation is misleading: an ACO whose documented
+            # risk grew faster than its spend is arguably improving efficiency.
+            tr, rr = a["expense_trend_by3_py"], a["risk_ratio_by3_py"]
+            if tr and rr:
+                if tr > rr:
+                    st.markdown('<div class="warnbox">Expense trend is outpacing risk-score '
+                                f'growth ({tr * 100:.2f}% vs {rr * 100:.2f}%). Cost is rising '
+                                'faster than documented acuity explains.</div>',
+                                unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="okbox">Expense trend is running at or below '
+                                f'risk-score growth ({tr * 100:.2f}% vs {rr * 100:.2f}%), so '
+                                'per-capita cost growth is at least matched by documented '
+                                'acuity.</div>', unsafe_allow_html=True)
+            if c["small_sample"]:
+                st.markdown('<div class="warnbox">Small peer cohort — treat these '
+                            'comparisons as directional.</div>', unsafe_allow_html=True)
+
+            g1, g2 = st.columns(2)
+            with g1:
+                st.markdown("##### Biggest gaps")
+                st.caption("Directional metrics only.")
+                for mm in ep["biggest_gaps"]:
+                    st.markdown(
+                        f'**{mm["label"]}**  \n'
+                        f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])} · cohort '
+                        f'median {fmt(mm["cohort_p50"], mm["unit"])} · </span>'
+                        + perf_pill(mm, mm["higher_is_better"]), unsafe_allow_html=True)
+            with g2:
+                st.markdown("##### Strongest areas")
+                st.caption("Directional metrics only.")
+                for mm in ep["top_strengths"]:
+                    st.markdown(
+                        f'**{mm["label"]}**  \n'
+                        f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])} · cohort '
+                        f'median {fmt(mm["cohort_p50"], mm["unit"])} · </span>'
+                        + perf_pill(mm, mm["higher_is_better"]), unsafe_allow_html=True)
+
+            def expense_block(title: str, items: list[dict], slug: str):
+                st.markdown(f"##### {title}")
+                headline = [m for m in items if m.get("important")]
+                rest = [m for m in items if not m.get("important")]
+                for i in range(0, len(headline), 4):
+                    for col, mm in zip(st.columns(4), headline[i:i + 4]):
+                        with col:
+                            badge = ('<span class="pill p-neut">two-sided</span>'
+                                     if mm["two_sided"] else "")
+                            st.markdown(f'<div class="lbl">{mm["label"]}</div>',
+                                        unsafe_allow_html=True)
+                            st.markdown(f'<div class="big-num">{fmt(mm["value"], mm["unit"])}</div>',
+                                        unsafe_allow_html=True)
+                            st.markdown(perf_pill(mm, mm["higher_is_better"]) + " " + badge,
+                                        unsafe_allow_html=True)
+                            st.markdown(f'<span class="muted">cohort median '
+                                        f'{fmt(mm["cohort_p50"], mm["unit"])}</span>',
+                                        unsafe_allow_html=True)
+                if rest:
+                    with st.expander(f"All {title.lower()} metrics ({len(items)})"):
+                        st.dataframe(pd.DataFrame([{
+                            "Metric": mm["label"],
+                            "Direction": ("two-sided" if mm["two_sided"]
+                                          else "lower is better" if mm["higher_is_better"] is False
+                                          else "higher is better"),
+                            "This ACO": fmt(mm["value"], mm["unit"]),
+                            "Cohort p25": fmt(mm.get("cohort_p25"), mm["unit"]),
+                            "Median": fmt(mm.get("cohort_p50"), mm["unit"]),
+                            "Cohort p75": fmt(mm.get("cohort_p75"), mm["unit"]),
+                            "Performance": (f'p{mm["performance_pct"]:.0f}'
+                                            if mm["performance_pct"] is not None else "—"),
+                            "n": mm["cohort_n"],
+                        } for mm in items]), hide_index=True, width='stretch')
+
+            expense_block("Cost", ep["cost"], "cost")
+            expense_block("Utilization", ep["utilization"], "util")
+
+            all_rows = pd.DataFrame([{
+                "Family": mm["family"], "Metric": mm["label"], "Unit": mm["unit"],
+                "This ACO": mm["value"], "Cohort p25": mm.get("cohort_p25"),
+                "Median": mm.get("cohort_p50"), "Cohort p75": mm.get("cohort_p75"),
+                "Performance percentile": mm["performance_pct"], "n": mm["cohort_n"],
+            } for mm in ep["cost"] + ep["utilization"]])
+            st.download_button("Download expense detail (CSV)", all_rows.to_csv(index=False),
+                               file_name=f"expense_{aco_id_e}_{py_e}.csv", mime="text/csv")
+
+            st.markdown("##### Medical expense narrative")
+            expq = st.text_input("Optional — focus the narrative on a question",
+                                 placeholder="e.g. Where is our post-acute spend leaking, and "
+                                             "is it a SNF admission or a length-of-stay problem?",
+                                 key="exp_q")
+            if st.button("Generate expense narrative", type="primary"):
+                if not os.environ.get("ANTHROPIC_API_KEY"):
+                    st.error("Set ANTHROPIC_API_KEY to enable narrative generation.")
+                else:
+                    prompt = load_prompt("medical_expense.md").format(
+                        aco_name=a["aco_name"],
+                        cohort_label=f'{COHORT_LABELS.get(c["name"], c["name"])}: {c["value"]}',
+                        cohort_n=c["n_peers"],
+                        payload=json.dumps({
+                            "total_per_capita_expenditure": a["per_capita_exp"],
+                            "expense_trend_by3_py": a["expense_trend_by3_py"],
+                            "risk_ratio_by3_py": a["risk_ratio_by3_py"],
+                            "n_beneficiaries": a["n_beneficiaries"],
+                            "cost": ep["cost"],
+                            "utilization": ep["utilization"],
+                        }, default=str)[:60000],
+                        user_question=(f"The reader specifically asks: {expq}" if expq else ""))
+                    with st.spinner("Generating…"):
+                        try:
+                            st.markdown(claude(prompt))
+                        except Exception as e:
+                            st.error(f"Narrative failed: {e}")
+
+# ================================================================ TAB 4
+with tabs[3]:
     st.markdown("### Benchmark my numbers")
     st.caption("Enter values and pick a peer cohort. Nothing is stored; the computation "
                "runs locally.")
@@ -424,8 +575,8 @@ with tabs[2]:
                 metric_card(rep["metrics"][k], preferred=tuple(filters))
                 st.write("")
 
-# ================================================================ TAB 4
-with tabs[3]:
+# ================================================================ TAB 5
+with tabs[4]:
     st.markdown("### Ask the data")
     st.caption("Free-form questions grounded in the cohort statistics. The model sees "
                "cohort distributions and measure definitions — not per-ACO records.")
@@ -450,8 +601,8 @@ with tabs[3]:
                 except Exception as e:
                     st.error(f"Q&A failed: {e}")
 
-# ================================================================ TAB 5
-with tabs[4]:
+# ================================================================ TAB 6
+with tabs[5]:
     mm = engine.meta()
     st.markdown("### Methodology")
     st.markdown(f"**Data vintage:** {mm.get('data_vintage')}")
@@ -463,7 +614,7 @@ with tabs[4]:
     st.markdown("#### Quality determination flags")
     st.dataframe(pd.DataFrame([{
         "Flag": f["label"], "Confidence": f["confidence"], "Meaning": f["description"],
-    } for f in mm.get("quality_flags", [])]), hide_index=True, use_container_width=True)
+    } for f in mm.get("quality_flags", [])]), hide_index=True, width='stretch')
     st.caption('Flags marked "verify" are readings inferred from the published data '
                "relationships; confirm against the CMS data dictionary before asserting "
                "them to a client.")
@@ -473,7 +624,7 @@ with tabs[4]:
         "Measure": q["label"], "Domain": q["domain"],
         "Direction": "lower is better" if q["higher_is_better"] is False else "higher is better",
         "PUF fields": ", ".join(q["variants"]),
-    } for q in mm["quality_measures"]]), hide_index=True, use_container_width=True)
+    } for q in mm["quality_measures"]]), hide_index=True, width='stretch')
     st.markdown("#### Limitations")
     st.markdown("""
 - FFS-only. Comparisons exclude Medicare Advantage populations.
