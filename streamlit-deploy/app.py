@@ -75,7 +75,14 @@ def load_prompt(name: str) -> str:
     return txt.replace("{shared_context}", shared.read_text() if shared.exists() else "")
 
 
+def no_math(text: str) -> str:
+    # Streamlit markdown renders text between two $ signs as LaTeX, which eats
+    # the dollar signs of amounts like "$445 ... $362".
+    return text.replace("$", "\\$")
+
+
 def claude(prompt: str, max_tokens: int = 1100) -> str:
+    """Narrative text from Claude, escaped for display with st.markdown."""
     import anthropic
     client = anthropic.Anthropic()
     msg = client.messages.create(
@@ -83,7 +90,7 @@ def claude(prompt: str, max_tokens: int = 1100) -> str:
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(b.text for b in msg.content if hasattr(b, "text")).strip()
+    return no_math("".join(b.text for b in msg.content if hasattr(b, "text")).strip())
 
 
 def fmt(v, unit):
@@ -529,8 +536,8 @@ with tabs[2]:
                 for mm in ep["biggest_gaps"]:
                     st.markdown(
                         f'**{mm["label"]}**  \n'
-                        f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])} · cohort '
-                        f'median {fmt(mm["cohort_p50"], mm["unit"])} · </span>'
+                        + no_math(f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])}'
+                                  f' · cohort median {fmt(mm["cohort_p50"], mm["unit"])} · </span>')
                         + perf_pill(mm, mm["higher_is_better"]), unsafe_allow_html=True)
             with g2:
                 st.markdown("##### Strongest areas")
@@ -538,8 +545,8 @@ with tabs[2]:
                 for mm in ep["top_strengths"]:
                     st.markdown(
                         f'**{mm["label"]}**  \n'
-                        f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])} · cohort '
-                        f'median {fmt(mm["cohort_p50"], mm["unit"])} · </span>'
+                        + no_math(f'<span class="muted">This ACO {fmt(mm["value"], mm["unit"])}'
+                                  f' · cohort median {fmt(mm["cohort_p50"], mm["unit"])} · </span>')
                         + perf_pill(mm, mm["higher_is_better"]), unsafe_allow_html=True)
 
             def expense_block(title: str, items: list[dict], slug: str):
