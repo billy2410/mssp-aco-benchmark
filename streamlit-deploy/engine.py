@@ -263,6 +263,23 @@ def _peer_rows(cohort_name: str, cohort_value, rows: list[dict],
     return [r for r in rows if r.get(key) == cohort_value]
 
 
+def cohort_sizes(aco_id: str, performance_year: int = 2024) -> dict[str, tuple[str, int]]:
+    """cohort name -> (this ACO's group within it, number of ACOs in that group)."""
+    row = get_aco(aco_id, performance_year)
+    if not row:
+        return {}
+    rows = aco_index().get(f"PY{performance_year}", [])
+    out = {}
+    for name, value in cohort_labels_for_row(row).items():
+        if value:
+            out[name] = (value, len(_peer_rows(name, value, rows, subject_id=aco_id)))
+    sts = aco_states().get(aco_id, [])
+    if sts:
+        shown = ", ".join(sts[:4]) + ("…" if len(sts) > 4 else "")
+        out["regional"] = (shown, len(_peer_rows("regional", None, rows, subject_id=aco_id)))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Financial benchmark
 # ---------------------------------------------------------------------------

@@ -50,6 +50,7 @@ st.markdown("""
   .src{color:#94a3b8;font-size:.76rem;border-top:1px solid #e2e8f0;padding-top:10px;margin-top:22px}
   .warnbox{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#92400e}
   .okbox{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#065f46}
+  [data-testid="stTooltipContent"]{max-height:75vh}
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,6 +113,45 @@ def perf_pill(c: dict, higher_is_better) -> str:
 COHORT_LABELS = {"track": "Track", "risk_model": "Risk model", "rev_cat": "Revenue category",
                  "size_band": "Size band", "all": "All ACOs", "regional": "Regional",
                  "by3_vintage": "Same BY3 vintage"}
+COHORT_CHOICES = ["track", "regional", "rev_cat", "size_band", "all"]
+
+COHORT_HELP = f"""\
+Choose which group of ACOs this one is ranked against. Percentiles and medians \
+change with the group you pick.
+
+- **Track**: ACOs in the same MSSP track (BASIC A–E or ENHANCED). Tracks set how much \
+downside risk an ACO carries and how much of its savings it can keep, so this is the \
+closest like-for-like comparison on financial terms.
+- **Regional**: ACOs that serve at least one of the same states. This is the best proxy \
+for competing in the same local market. ACOs that span several states get large, broad \
+peer groups.
+- **Revenue category**: high-revenue vs. low-revenue ACOs as CMS classifies them. \
+High-revenue ACOs usually include a hospital or health system; low-revenue ACOs are \
+usually physician-led.
+- **Size band**: ACOs with a similar number of assigned beneficiaries (<5K, 5–10K, \
+10–25K, 25–50K, 50–100K, 100K+). Smaller ACOs' results tend to swing more from year \
+to year.
+- **All ACOs**: every ACO in the performance year, for the broadest national view.
+
+Once an ACO is selected, each option shows its group and how many ACOs are in it. \
+Groups with fewer than {engine.MIN_REGIONAL_N} ACOs are marked ⚠️ and should be read \
+as directional."""
+
+
+def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> str:
+    sizes = engine.cohort_sizes(aco_id, py) if aco_id else {}
+
+    def label(c: str) -> str:
+        base = COHORT_LABELS.get(c, c)
+        if c not in sizes:
+            return base
+        value, n = sizes[c]
+        warn = "⚠️ " if n < engine.MIN_REGIONAL_N else ""
+        group = "" if value == base else f": {value}"
+        return f"{base}{group} · {warn}{n} ACOs"
+
+    return st.radio("Compare against", COHORT_CHOICES, format_func=label,
+                    horizontal=True, key=key, help=f"{COHORT_HELP}\n\n{tab_note}")
 
 # BY3-anchored metrics lead with the vintage-matched cohort; everything else
 # follows the user's selection.
@@ -214,13 +254,12 @@ def aco_picker(key: str):
 # ================================================================ TAB 1
 with tabs[0]:
     aco_id, py = aco_picker("lookup")
-    focus = st.radio(
-        "Compare against",
-        ["track", "regional", "rev_cat", "size_band", "all"],
-        format_func=lambda c: COHORT_LABELS.get(c, c),
-        horizontal=True, key="lookup_cohort",
-        help="Drives which cohort the cards and the narrative lead with. "
-             "The two BY3-anchored ratios always also show their same-vintage cohort.")
+    focus = cohort_radio(
+        "lookup_cohort", aco_id, py,
+        "This sets which group the cards and narrative lead with. Every group is still "
+        "shown under 'Cohort detail'. Risk score ratio and expense trend are also compared "
+        "against ACOs whose benchmark was set in the same year, since those ratios depend "
+        "on when the benchmark was set.")
     if aco_id:
         rep = engine.benchmark_aco(aco_id, performance_year=py)
         a = rep["aco"]
@@ -300,9 +339,10 @@ with tabs[1]:
     st.caption("Every reported quality measure ranked against a peer cohort, "
                "direction-adjusted so a high percentile always means good performance.")
     aco_id_q, py_q = aco_picker("quality")
-    cohort_choice = st.radio("Compare against", ["track", "regional", "rev_cat", "size_band", "all"],
-                             format_func=lambda c: COHORT_LABELS.get(c, c),
-                             horizontal=True, key="qcohort")
+    cohort_choice = cohort_radio(
+        "qcohort", aco_id_q, py_q,
+        "Every quality measure, gap, and strength on this tab is ranked against the group "
+        "you pick.")
     if aco_id_q:
         qp = engine.quality_profile(aco_id_q, cohort=cohort_choice, performance_year=py_q)
         if not qp:
@@ -409,9 +449,9 @@ with tabs[2]:
                "Metrics marked two-sided are ranked but not scored good or bad — "
                "raising ambulatory contact is often how acute utilization comes down.")
     aco_id_e, py_e = aco_picker("expense")
-    cohort_e = st.radio("Compare against", ["track", "regional", "rev_cat", "size_band", "all"],
-                        format_func=lambda c: COHORT_LABELS.get(c, c),
-                        horizontal=True, key="ecohort")
+    cohort_e = cohort_radio(
+        "ecohort", aco_id_e, py_e,
+        "Every cost and utilization metric on this tab is ranked against the group you pick.")
     if aco_id_e:
         ep = engine.expense_profile(aco_id_e, cohort=cohort_e, performance_year=py_e)
         if not ep:
