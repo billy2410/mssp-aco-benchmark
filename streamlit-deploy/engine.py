@@ -263,20 +263,35 @@ def _peer_rows(cohort_name: str, cohort_value, rows: list[dict],
     return [r for r in rows if r.get(key) == cohort_value]
 
 
-def cohort_sizes(aco_id: str, performance_year: int = 2024) -> dict[str, tuple[str, int]]:
-    """cohort name -> (this ACO's group within it, number of ACOs in that group)."""
+def _same_vintage(peers: list[dict], row: dict) -> list[dict]:
+    v = row.get("by3_vintage")
+    return [p for p in peers if p.get("by3_vintage") == v] if v else peers
+
+
+def _group_peers(row: dict, aco_id: str, cohort: str,
+                 rows: list[dict]) -> tuple[str, str, list[dict]]:
+    """Resolve the ACO's group within `cohort`; falls back to all ACOs if it has none."""
+    cvalue = (regional_label(aco_id) if cohort == "regional"
+              else cohort_labels_for_row(row).get(cohort))
+    if cohort != "regional" and not cvalue:
+        cohort, cvalue = "all", "All ACOs"
+    return cohort, cvalue, _peer_rows(cohort, cvalue, rows, subject_id=aco_id)
+
+
+def cohort_sizes(aco_id: str, performance_year: int = 2024) -> dict[str, tuple[str, int, int]]:
+    """cohort name -> (this ACO's group, ACOs in the group, of those with the same BY3 vintage)."""
     row = get_aco(aco_id, performance_year)
     if not row:
         return {}
     rows = aco_index().get(f"PY{performance_year}", [])
-    out = {}
-    for name, value in cohort_labels_for_row(row).items():
-        if value:
-            out[name] = (value, len(_peer_rows(name, value, rows, subject_id=aco_id)))
+    groups = [(name, value) for name, value in cohort_labels_for_row(row).items() if value]
     sts = aco_states().get(aco_id, [])
     if sts:
-        shown = ", ".join(sts[:4]) + ("…" if len(sts) > 4 else "")
-        out["regional"] = (shown, len(_peer_rows("regional", None, rows, subject_id=aco_id)))
+        groups.append(("regional", ", ".join(sts[:4]) + ("…" if len(sts) > 4 else "")))
+    out = {}
+    for name, value in groups:
+        peers = _peer_rows(name, value, rows, subject_id=aco_id)
+        out[name] = (value, len(peers), len(_same_vintage(peers, row)))
     return out
 
 
@@ -303,7 +318,9 @@ def unavailable_note(key: str, performance_year: int, value) -> str | None:
 
 
 def benchmark_aco(aco_id: str, performance_year: int = 2024,
-                  include_regional: bool = True) -> dict | None:
+                  include_regional: bool = True, vintage_only: bool = False) -> dict | None:
+    """Rank every metric against each cohort. BY3-anchored ratios are always ranked
+    within same-vintage peers; `vintage_only` applies that to every metric."""
     row = get_aco(aco_id, performance_year)
     if not row:
         return None
@@ -313,25 +330,21 @@ def benchmark_aco(aco_id: str, performance_year: int = 2024,
     cohort_specs = [(k, v) for k, v in labels.items() if v]
     if include_regional and regional_peers(aco_id):
         cohort_specs.append(("regional", regional_label(aco_id)))
-
-    vintage_spec = (("by3_vintage", row.get("by3_vintage"))
-                    if row.get("by3_vintage") else None)
+    peers_by_cohort = {c: _peer_rows(c, v, rows, subject_id=aco_id) for c, v in cohort_specs}
 
     metric_results = {}
     for key, mdef in METRIC_DEFS.items():
         value = _num(row.get(mdef["source_col"], row.get(key)))
-        # BY3-anchored ratios additionally get a same-vintage cohort; nothing else does.
-        specs = list(cohort_specs)
-        if mdef.get("vintage_sensitive") and vintage_spec:
-            specs.append(vintage_spec)
+        same_vintage = vintage_only or bool(mdef.get("vintage_sensitive"))
         comparisons = {}
-        for cname, cvalue in specs:
-            peers = _peer_rows(cname, cvalue, rows, subject_id=aco_id)
+        for cname, cvalue in cohort_specs:
+            peers = peers_by_cohort[cname]
+            if same_vintage:
+                peers = _same_vintage(peers, row)
             pvals = [_num(p.get(mdef["source_col"], p.get(key))) for p in peers]
             r = _rank_exact(value, pvals, mdef["higher_is_better"])
-            if cname in ("regional", "by3_vintage"):
-                r["small_sample"] = r["cohort_n"] < MIN_REGIONAL_N
-            comparisons[cname] = {"cohort_value": cvalue, **r}
+            r["small_sample"] = r["cohort_n"] < MIN_REGIONAL_N
+            comparisons[cname] = {"cohort_value": cvalue, "same_vintage": same_vintage, **r}
         metric_results[key] = {**mdef, "value": value, "comparisons": comparisons,
                                "unavailable": unavailable_note(key, performance_year, value)}
 
@@ -343,11 +356,12 @@ def benchmark_aco(aco_id: str, performance_year: int = 2024,
             "n_beneficiaries": row.get("N_AB"),
             "final_adj_type": row.get("final_adj_type"),
             "service_area": aco_states().get(aco_id, []),
-            "regional_peer_n": len(regional_peers(aco_id)),
+            "regional_peer_n": len(peers_by_cohort.get("regional", [])),
             "by3_year": row.get("by3_year"),
             "by3_vintage": row.get("by3_vintage"),
             "quality_flags": quality_flags(row),
         },
+        "vintage_only": vintage_only,
         "performance_year": performance_year,
         "data_vintage": meta().get("data_vintage"),
         "metrics": metric_results,
@@ -382,8 +396,8 @@ def benchmark_synthetic(metric_values: dict[str, float],
 # ---------------------------------------------------------------------------
 # Quality profiling
 # ---------------------------------------------------------------------------
-def quality_profile(aco_id: str, cohort: str = "track",
-                    performance_year: int = 2024) -> dict | None:
+def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 2024,
+                    vintage_only: bool = False) -> dict | None:
     """Every quality measure ranked against one cohort, split into
     strengths and gaps by direction-aware performance percentile."""
     row = get_aco(aco_id, performance_year)
@@ -391,10 +405,9 @@ def quality_profile(aco_id: str, cohort: str = "track",
         return None
     rows = aco_index().get(f"PY{performance_year}", [])
     labels = cohort_labels_for_row(row)
-    cvalue = regional_label(aco_id) if cohort == "regional" else labels.get(cohort)
-    if cohort != "regional" and not cvalue:
-        cohort, cvalue = "all", "All ACOs"
-    peers = _peer_rows(cohort, cvalue, rows, subject_id=aco_id)
+    cohort, cvalue, peers = _group_peers(row, aco_id, cohort, rows)
+    if vintage_only:
+        peers = _same_vintage(peers, row)
 
     measures = []
     for key, qdef in QUALITY_DEFS.items():
@@ -428,8 +441,10 @@ def quality_profile(aco_id: str, cohort: str = "track",
         "aco": {"aco_id": row["ACO_ID"], "aco_name": row["ACO_Name"],
                 "quality_score": _num(row.get("QualScore")),
                 "track": labels["track"], "size_band": labels["size_band"],
+                "by3_vintage": row.get("by3_vintage"),
                 "quality_flags": quality_flags(row)},
         "cohort": {"name": cohort, "value": cvalue, "n_peers": len(peers),
+                   "same_vintage": vintage_only,
                    "small_sample": len(peers) < MIN_REGIONAL_N},
         "performance_year": performance_year,
         "data_vintage": meta().get("data_vintage"),
@@ -440,8 +455,8 @@ def quality_profile(aco_id: str, cohort: str = "track",
     }
 
 
-def expense_profile(aco_id: str, cohort: str = "track",
-                    performance_year: int = 2024) -> dict | None:
+def expense_profile(aco_id: str, cohort: str = "track", performance_year: int = 2024,
+                    vintage_only: bool = False) -> dict | None:
     """Cost and utilization metrics ranked against one cohort.
 
     Deliberately mirrors quality_profile's cohort resolution so that the
@@ -457,10 +472,19 @@ def expense_profile(aco_id: str, cohort: str = "track",
         return None
     rows = aco_index().get(f"PY{performance_year}", [])
     labels = cohort_labels_for_row(row)
-    cvalue = regional_label(aco_id) if cohort == "regional" else labels.get(cohort)
-    if cohort != "regional" and not cvalue:
-        cohort, cvalue = "all", "All ACOs"
-    peers = _peer_rows(cohort, cvalue, rows, subject_id=aco_id)
+    cohort, cvalue, group = _group_peers(row, aco_id, cohort, rows)
+    vintage_peers = _same_vintage(group, row)
+    peers = vintage_peers if vintage_only else group
+
+    by3_metrics = []
+    for key, mdef in METRIC_DEFS.items():
+        if mdef.get("vintage_sensitive"):
+            value = _num(row.get(mdef["source_col"], row.get(key)))
+            pvals = [_num(p.get(mdef["source_col"], p.get(key))) for p in vintage_peers]
+            by3_metrics.append({"key": key, "label": mdef["label"], "unit": mdef["unit"],
+                                "higher_is_better": mdef["higher_is_better"],
+                                "same_vintage": True,
+                                **_rank_exact(value, pvals, mdef["higher_is_better"])})
 
     cost, utilization = [], []
     for key, mdef in EXPENSE_DEFS.items():
@@ -489,9 +513,12 @@ def expense_profile(aco_id: str, cohort: str = "track",
                 "n_beneficiaries": row.get("N_AB"),
                 "per_capita_exp": _num(row.get("Per_Capita_Exp_TOTAL_PY")),
                 "expense_trend_by3_py": _num(row.get("expense_trend_by3_py")),
-                "risk_ratio_by3_py": _num(row.get("risk_ratio_by3_py"))},
+                "risk_ratio_by3_py": _num(row.get("risk_ratio_by3_py")),
+                "by3_vintage": row.get("by3_vintage")},
         "cohort": {"name": cohort, "value": cvalue, "n_peers": len(peers),
+                   "same_vintage": vintage_only,
                    "small_sample": len(peers) < MIN_REGIONAL_N},
+        "by3_metrics": by3_metrics,
         "performance_year": performance_year,
         "data_vintage": meta().get("data_vintage"),
         "cost": _order(cost),
@@ -512,22 +539,13 @@ def quality_flags(row: dict) -> list[dict]:
 
 
 def focus_report(report: dict, focus: str | None) -> dict:
-    """Narrow a report's comparisons to one cohort so the narrative can hone in.
-
-    The vintage cohort is always retained for the two BY3-anchored metrics —
-    dropping it would let the narrative compare ratios across incompatible
-    benchmark vintages.
-    """
+    """Narrow a report's comparisons to one cohort so the narrative can hone in."""
     if not focus or focus == "all_cohorts":
         return report
     out = json.loads(json.dumps(report, default=str))
-    for key, m in out.get("metrics", {}).items():
-        keep = {}
+    for m in out.get("metrics", {}).values():
         if focus in m["comparisons"]:
-            keep[focus] = m["comparisons"][focus]
-        if METRIC_DEFS.get(key, {}).get("vintage_sensitive") and "by3_vintage" in m["comparisons"]:
-            keep["by3_vintage"] = m["comparisons"]["by3_vintage"]
-        m["comparisons"] = keep or m["comparisons"]
+            m["comparisons"] = {focus: m["comparisons"][focus]}
     out["focus_cohort"] = focus
     return out
 

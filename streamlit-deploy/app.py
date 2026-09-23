@@ -111,8 +111,7 @@ def perf_pill(c: dict, higher_is_better) -> str:
 
 
 COHORT_LABELS = {"track": "Track", "risk_model": "Risk model", "rev_cat": "Revenue category",
-                 "size_band": "Size band", "all": "All ACOs", "regional": "Regional",
-                 "by3_vintage": "Same BY3 vintage"}
+                 "size_band": "Size band", "all": "All ACOs", "regional": "Regional"}
 COHORT_CHOICES = ["track", "regional", "rev_cat", "size_band", "all"]
 
 COHORT_HELP = f"""\
@@ -133,31 +132,55 @@ usually physician-led.
 to year.
 - **All ACOs**: every ACO in the performance year, for the broadest national view.
 
-Once an ACO is selected, each option shows its group and how many ACOs are in it. \
-Groups with fewer than {engine.MIN_REGIONAL_N} ACOs are marked ⚠️ and should be read \
-as directional."""
+Once an ACO is selected, each option shows its group, how many ACOs are in it, and how \
+many of those share this ACO's BY3 vintage (the year its benchmark was set). Counts \
+under {engine.MIN_REGIONAL_N} are marked ⚠️ and should be read as directional."""
+
+VINTAGE_HELP = """\
+**Off:** every metric is ranked against all ACOs in the selected group.
+
+**On:** every metric on this tab is ranked only against ACOs in the selected group whose \
+benchmark year 3 (BY3) is the same as this ACO's.
+
+Expense trend and risk score ratio always use same-vintage ACOs either way, because \
+those two ratios depend on when the benchmark was set."""
+
+BY3_NOTE = ("Expense trend and risk score ratio are always compared only against ACOs in "
+            "the group that share this ACO's BY3 vintage, since those ratios depend on when "
+            "the benchmark was set.")
 
 
-def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> str:
+def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> tuple[str, bool]:
+    """The 'Compare against' selector plus the same-vintage switch."""
     sizes = engine.cohort_sizes(aco_id, py) if aco_id else {}
+
+    def count(n: int) -> str:
+        return f"{'⚠️ ' if n < engine.MIN_REGIONAL_N else ''}{n}"
 
     def label(c: str) -> str:
         base = COHORT_LABELS.get(c, c)
         if c not in sizes:
             return base
-        value, n = sizes[c]
-        warn = "⚠️ " if n < engine.MIN_REGIONAL_N else ""
+        value, n, n_vint = sizes[c]
         group = "" if value == base else f": {value}"
-        return f"{base}{group} · {warn}{n} ACOs"
+        return f"{base}{group} · {count(n)} ACOs ({count(n_vint)} same vintage)"
 
-    return st.radio("Compare against", COHORT_CHOICES, format_func=label,
-                    horizontal=True, key=key, help=f"{COHORT_HELP}\n\n{tab_note}")
+    cohort = st.radio("Compare against", COHORT_CHOICES, format_func=label,
+                      horizontal=True, key=key, help=f"{COHORT_HELP}\n\n{tab_note}")
+    row = engine.get_aco(aco_id, py) if aco_id else None
+    vintage = f" ({row['by3_vintage']})" if row and row.get("by3_vintage") else ""
+    vintage_only = st.toggle(f"Same BY3 vintage only{vintage}", key=f"{key}_vintage",
+                             help=VINTAGE_HELP)
+    return cohort, vintage_only
 
-# BY3-anchored metrics lead with the vintage-matched cohort; everything else
-# follows the user's selection.
+
+def cohort_text(c: dict) -> str:
+    """'Track: ENHANCED', plus the vintage when the group was narrowed to it."""
+    text = f'{COHORT_LABELS.get(c["name"], c["name"])}: {c["value"]}'
+    return f"{text}, same BY3 vintage only" if c.get("same_vintage") else text
+
+
 def preferred_for(metric: dict, focus: str | None):
-    if metric.get("vintage_sensitive"):
-        return ("by3_vintage", focus or "track", "regional", "rev_cat", "size_band", "all")
     if focus:
         return (focus, "track", "regional", "rev_cat", "size_band", "all")
     return ("regional", "track", "rev_cat", "size_band", "all")
@@ -190,16 +213,17 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
     if pick:
         c = m["comparisons"][pick]
         small = " ⚠︎ small cohort" if c.get("small_sample") else ""
+        vint = ", same BY3 vintage" if c.get("same_vintage") else ""
         st.markdown(
             perf_pill(c, m["higher_is_better"])
             + f'<span class="muted"> vs {COHORT_LABELS.get(pick, pick)}'
-              f' ({c["cohort_value"]}, n={c["cohort_n"]}){small}</span>',
+              f' ({c["cohort_value"]}{vint}, n={c["cohort_n"]}){small}</span>',
             unsafe_allow_html=True)
     with st.expander("Cohort detail"):
         rows = []
         for cn, c in m["comparisons"].items():
             rows.append({
-                "Cohort": f'{COHORT_LABELS.get(cn, cn)}: {c["cohort_value"]}',
+                "Cohort": cohort_text({"name": cn, **c, "value": c["cohort_value"]}),
                 "n": c["cohort_n"],
                 "This ACO": fmt(m["value"], m["unit"]),
                 "p25": fmt(c.get("cohort_p25"), m["unit"]),
@@ -254,14 +278,12 @@ def aco_picker(key: str):
 # ================================================================ TAB 1
 with tabs[0]:
     aco_id, py = aco_picker("lookup")
-    focus = cohort_radio(
+    focus, vint_l = cohort_radio(
         "lookup_cohort", aco_id, py,
         "This sets which group the cards and narrative lead with. Every group is still "
-        "shown under 'Cohort detail'. Risk score ratio and expense trend are also compared "
-        "against ACOs whose benchmark was set in the same year, since those ratios depend "
-        "on when the benchmark was set.")
+        f"shown under 'Cohort detail'. {BY3_NOTE}")
     if aco_id:
-        rep = engine.benchmark_aco(aco_id, performance_year=py)
+        rep = engine.benchmark_aco(aco_id, performance_year=py, vintage_only=vint_l)
         a = rep["aco"]
         fl = flags_by_key(a.get("quality_flags"))
         st.markdown(f"### {a['aco_name']}")
@@ -322,9 +344,10 @@ with tabs[0]:
                 prompt = load_prompt("narrative.md").format(
                     aco_name=a["aco_name"],
                     focus_note=(f"The reader selected **{COHORT_LABELS.get(focus, focus)}** as the "
-                                f"comparison cohort. Anchor the analysis there. The two BY3-anchored "
-                                f"ratios also carry their same-vintage cohort — lead with that for "
-                                f"those two metrics."),
+                                f"comparison cohort. Anchor the analysis there."
+                                + (" The reader also chose to compare every metric against "
+                                   f"same-vintage ACOs only ({a['by3_vintage']})."
+                                   if vint_l else "")),
                     payload=json.dumps(slim, default=str)[:60000],
                     user_question=(f"The reader specifically asks: {uq}" if uq else ""))
                 with st.spinner("Generating…"):
@@ -339,12 +362,13 @@ with tabs[1]:
     st.caption("Every reported quality measure ranked against a peer cohort, "
                "direction-adjusted so a high percentile always means good performance.")
     aco_id_q, py_q = aco_picker("quality")
-    cohort_choice = cohort_radio(
+    cohort_choice, vint_q = cohort_radio(
         "qcohort", aco_id_q, py_q,
         "Every quality measure, gap, and strength on this tab is ranked against the group "
         "you pick.")
     if aco_id_q:
-        qp = engine.quality_profile(aco_id_q, cohort=cohort_choice, performance_year=py_q)
+        qp = engine.quality_profile(aco_id_q, cohort=cohort_choice, performance_year=py_q,
+                                    vintage_only=vint_q)
         if not qp:
             st.warning("No quality data for this ACO.")
         else:
@@ -429,7 +453,7 @@ with tabs[1]:
                 else:
                     prompt = load_prompt("quality_coach.md").format(
                         aco_name=qp["aco"]["aco_name"],
-                        cohort_label=f'{COHORT_LABELS.get(c["name"], c["name"])}: {c["value"]}',
+                        cohort_label=cohort_text(c),
                         cohort_n=c["n_peers"],
                         payload=json.dumps({"composite_quality_score": qp["aco"]["quality_score"],
                                             "quality_flags": qp["aco"].get("quality_flags"),
@@ -449,24 +473,36 @@ with tabs[2]:
                "Metrics marked two-sided are ranked but not scored good or bad — "
                "raising ambulatory contact is often how acute utilization comes down.")
     aco_id_e, py_e = aco_picker("expense")
-    cohort_e = cohort_radio(
+    cohort_e, vint_e = cohort_radio(
         "ecohort", aco_id_e, py_e,
-        "Every cost and utilization metric on this tab is ranked against the group you pick.")
+        f"Every cost and utilization metric on this tab is ranked against the group you pick. "
+        f"{BY3_NOTE}")
     if aco_id_e:
-        ep = engine.expense_profile(aco_id_e, cohort=cohort_e, performance_year=py_e)
+        ep = engine.expense_profile(aco_id_e, cohort=cohort_e, performance_year=py_e,
+                                    vintage_only=vint_e)
         if not ep:
             st.warning("No expense data for this ACO.")
         else:
             c = ep["cohort"]
             a = ep["aco"]
+            by3 = {m["key"]: m for m in ep["by3_metrics"]}
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total per-capita expenditure",
                       fmt(a["per_capita_exp"], "$"))
-            m2.metric("Expense trend (BY3 → PY)",
-                      fmt(a["expense_trend_by3_py"], "pct_ratio"))
-            m3.metric("Risk score ratio (BY3 → PY)",
-                      fmt(a["risk_ratio_by3_py"], "pct_ratio"))
-            m4.metric("Peer cohort size", c["n_peers"])
+            for col, key, title in ((m2, "expense_trend_by3_py", "Expense trend (BY3 → PY)"),
+                                    (m3, "risk_ratio_by3_py", "Risk score ratio (BY3 → PY)")):
+                with col:
+                    mm = by3[key]
+                    st.metric(title, fmt(mm["value"], mm["unit"]))
+                    small = " ⚠︎ small cohort" if mm["cohort_n"] < engine.MIN_REGIONAL_N else ""
+                    st.markdown(
+                        perf_pill(mm, mm["higher_is_better"])
+                        + f'<br><span class="muted">vs {c["value"]}, same BY3 vintage '
+                          f'({a["by3_vintage"]}), n={mm["cohort_n"]}{small} · median '
+                          f'{fmt(mm["cohort_p50"], mm["unit"])}</span>',
+                        unsafe_allow_html=True)
+            m4.metric("Peer cohort size", c["n_peers"],
+                      help="ACOs used for every other metric on this tab.")
 
             # Cost trend read in isolation is misleading: an ACO whose documented
             # risk grew faster than its spend is arguably improving efficiency.
@@ -563,12 +599,12 @@ with tabs[2]:
                 else:
                     prompt = load_prompt("medical_expense.md").format(
                         aco_name=a["aco_name"],
-                        cohort_label=f'{COHORT_LABELS.get(c["name"], c["name"])}: {c["value"]}',
+                        cohort_label=cohort_text(c),
                         cohort_n=c["n_peers"],
                         payload=json.dumps({
                             "total_per_capita_expenditure": a["per_capita_exp"],
-                            "expense_trend_by3_py": a["expense_trend_by3_py"],
-                            "risk_ratio_by3_py": a["risk_ratio_by3_py"],
+                            "by3_vintage": a["by3_vintage"],
+                            "by3_anchored_metrics": ep["by3_metrics"],
                             "n_beneficiaries": a["n_beneficiaries"],
                             "cost": ep["cost"],
                             "utilization": ep["utilization"],

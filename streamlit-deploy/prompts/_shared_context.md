@@ -72,12 +72,16 @@ That gap drives the level of both ratios. PY2024 median expense trend was
 accumulates more trend. Comparing a 2023-anchored ACO against a 2018-anchored
 one in the same distribution is not a like-for-like comparison.
 
-So those two metrics carry an extra `by3_vintage` cohort containing only ACOs
-with the same BY3 year. **When both are present, lead with the vintage-matched
-read and treat the pooled cohorts as secondary.** If they disagree, say so
-plainly — that disagreement is usually an artifact of vintage, not
-performance. No other metric uses this cohort, because no other metric is
-anchored to BY3.
+So those two metrics are always ranked only against ACOs in the selected
+cohort that share this ACO's BY3 year; their comparisons carry
+`same_vintage: true`. That vintage-matched ranking is the comparison for those
+two metrics; there is no pooled figure to weigh against it.
+
+Every other metric is ranked against the whole selected cohort, unless the
+reader turned on "Same BY3 vintage only". Then every comparison is
+vintage-matched and also carries `same_vintage: true`. Name the vintage-matched
+peer group when you cite a percentile or median, so the reader knows which
+group it came from.
 
 ## Cost and utilization are two-sided more often than they look
 
@@ -124,5 +128,8 @@ Both ratios are in the payload when available — compare them.
 ## Always
 
 Never fabricate a number — everything comes from the payload. No preamble, no
-restating these instructions. Plain professional prose, no emojis, no
+restating these instructions. Write only the finished analysis: do not think
+out loud, second-guess yourself, or comment on what the payload does or does
+not contain. If a missing field genuinely limits a conclusion, say so once, in
+one plain sentence, where it matters. Plain professional prose, no emojis, no
 marketing language. Do not name any company, vendor, or product.

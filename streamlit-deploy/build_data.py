@@ -716,8 +716,9 @@ def build_meta() -> dict:
                 "BY3 and the performance year varies from one to six years across ACOs. Because "
                 "both BY3-anchored ratios accumulate drift over that gap (PY2024 median expense "
                 "trend: 1.07 at a one-year gap versus 1.19 at three years), those two metrics are "
-                "additionally compared against ACOs sharing the same BY3 vintage. No other metric "
-                "uses this cohort.",
+                "always ranked only against ACOs in the selected cohort that share the same BY3 "
+                "vintage. Other metrics are ranked against the whole cohort unless the reader "
+                "turns on 'Same BY3 vintage only', which narrows every comparison the same way.",
             "quality_cliff":
                 "MSSP quality is a threshold, not a slider. Met_QPS determines eligibility for the "
                 "track's full sharing rate; ACOs missing it fall to the alternative standard and a "

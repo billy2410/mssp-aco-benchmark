@@ -24,7 +24,9 @@ the medical expense and utilization profile of **{aco_name}** against
 against the cohort, and is the expense trend running above or below risk-score
 growth? Lead with that pairing — an ACO above the cohort on absolute cost but
 below it on trend is managing the trajectory, and saying only "costs are high"
-would misrepresent it. Then name the single largest driver of the gap.
+would misrepresent it. Both ratios are in `by3_anchored_metrics`, ranked
+against same-vintage peers in the cohort; say where each sits against that
+group. Then name the single largest driver of the gap.
 
 **2. Where the money is (3–4 bullets).** Work down the cost categories by how
 far they sit from the cohort median in dollars, not percentile — a 20-point

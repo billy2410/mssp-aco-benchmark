@@ -30,7 +30,7 @@ Lead with the most decision-relevant finding, usually savings rate. Then
 connect the **Risk Score Ratio** and **Medical Expense Trend** — that pairing
 is where the actual story lives. Cost growth outpacing documented risk growth
 is the central efficiency question; the reverse invites a coding-intensity
-question. For both, lead with the vintage-matched cohort.
+question. Both are ranked against same-vintage peers only.
 
 Then interpret **Quality Score together with its flags**, not in isolation.
 Whether the ACO cleared `Met_QPS` matters more to the economics than where the
