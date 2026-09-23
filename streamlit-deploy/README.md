@@ -60,7 +60,9 @@ Every narrative the tool produces is driven by a plain-text file in `prompts/`:
 |---|---|
 | `prompts/quality_coach.md` | The quality coaching narrative |
 | `prompts/narrative.md` | The financial performance narrative |
+| `prompts/medical_expense.md` | The medical expense / utilization narrative |
 | `prompts/qa.md` | The "Ask the data" tab |
+| `prompts/_shared_context.md` | MSSP program knowledge spliced into all four of the above — edit once, it propagates everywhere. Do not write the shared-context placeholder token literally in this file. |
 
 Edit the file, save it, click **Rerun** in Streamlit. The next narrative uses
 your version. No redeploy, no code changes.

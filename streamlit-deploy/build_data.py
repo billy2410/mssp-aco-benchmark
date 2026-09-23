@@ -83,6 +83,10 @@ METRICS = [
      "Skilled nursing facility admissions per 1,000 person-years."),
     ("snf_los", "SNF Length of Stay (days)", "SNF_LOS", "days", False,
      "Average SNF length of stay."),
+    ("pc_services_per_1000", "Primary Care Services / 1000", "P_EM_Total", "per 1k", None,
+     "All evaluation & management services per 1,000 person-years. Deliberately "
+     "undirected: raising ambulatory contact is usually how an ACO drives acute "
+     "utilization down, so a high value is not on its own a negative finding."),
     ("readmits_proxy", "30-day Readmission Risk-Std (Measure 479)", "Measure_479", "%", False,
      "All-cause unplanned admissions for patients with multiple chronic conditions."),
     ("pct_dual", "Dual-Eligible %", "Perc_Dual", "%", None,
@@ -114,6 +118,98 @@ METRICS = [
      "Credit for past program performance, before CMS selects between it and the regional "
      "adjustment."),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Medical expense & utilization registry.
+#
+# (key, label, source_col, unit, higher_is_better, important, family, description)
+#
+# On `higher_is_better`: this drives percentile direction, so a wrong value
+# tells an ACO the opposite of the truth. Categories where reducing spend is
+# unambiguously the goal are marked False. Categories where the value-based
+# reading is genuinely two-sided are marked None (ranked, but reported without
+# a good/bad verdict) rather than guessed:
+#   - Hospice, home health, physician/professional services and primary-care
+#     E&M all rise when an ACO substitutes lower-acuity care for inpatient
+#     care, which is the intended behaviour, not a failure.
+# The narrative prompt is told to treat None-direction metrics as descriptive.
+#
+# `important` mirrors the 13 fields the actuarial reviewer asked to surface as
+# cards; the remainder render in an expandable table. All of them are fed to
+# the narrative regardless of display.
+# ---------------------------------------------------------------------------
+EXPENSE_METRICS = [
+    # ---- Cost: per-capita annualized spend ($) ----
+    ("cap_inp_all", "Inpatient — All", "CapAnn_INP_All", "$", False, True, "cost",
+     "Per-capita annualized inpatient spend, all inpatient settings combined."),
+    ("cap_inp_short", "Inpatient — Short-Term", "CapAnn_INP_S_trm", "$", False, False, "cost",
+     "Per-capita annualized short-term acute inpatient spend."),
+    ("cap_inp_long", "Inpatient — Long-Term", "CapAnn_INP_L_trm", "$", False, False, "cost",
+     "Per-capita annualized long-term care hospital spend."),
+    ("cap_inp_rehab", "Inpatient — Rehab", "CapAnn_INP_Rehab", "$", False, False, "cost",
+     "Per-capita annualized inpatient rehabilitation facility spend."),
+    ("cap_inp_psych", "Inpatient — Psych", "CapAnn_INP_Psych", "$", False, False, "cost",
+     "Per-capita annualized inpatient psychiatric facility spend."),
+    ("cap_hospice", "Hospice", "CapAnn_HSP", "$", None, False, "cost",
+     "Per-capita annualized hospice spend. Two-sided: higher spend can reflect "
+     "appropriate end-of-life care that displaces aggressive inpatient utilization."),
+    ("cap_snf", "Skilled Nursing Facility", "CapAnn_SNF", "$", False, True, "cost",
+     "Per-capita annualized SNF spend — a primary post-acute lever in value-based care."),
+    ("cap_opd", "Hospital Outpatient", "CapAnn_OPD", "$", False, True, "cost",
+     "Per-capita annualized hospital outpatient department spend."),
+    ("cap_pb", "Physician / Professional", "CapAnn_PB", "$", None, True, "cost",
+     "Per-capita annualized Part B professional services spend. Two-sided: higher "
+     "professional spend may reflect stronger ambulatory access rather than waste."),
+    ("cap_ambulance", "Ambulance", "CapAnn_AmbPay", "$", False, False, "cost",
+     "Per-capita annualized ambulance spend."),
+    ("cap_hha", "Home Health", "CapAnn_HHA", "$", None, False, "cost",
+     "Per-capita annualized home health spend. Two-sided: home health frequently "
+     "substitutes for more expensive SNF days."),
+    ("cap_dme", "Durable Medical Equipment", "CapAnn_DME", "$", False, True, "cost",
+     "Per-capita annualized DME spend."),
+    # ---- Utilization: per 1,000 person-years unless noted ----
+    ("util_adm", "Inpatient Discharges / 1000", "ADM", "per 1k", False, True, "utilization",
+     "Acute inpatient discharges per 1,000 person-years."),
+    ("util_adm_short", "Discharges — Short-Term / 1000", "ADM_S_Trm", "per 1k", False, False, "utilization",
+     "Short-term acute inpatient discharges per 1,000 person-years."),
+    ("util_adm_long", "Discharges — Long-Term / 1000", "ADM_L_Trm", "per 1k", False, False, "utilization",
+     "Long-term care hospital discharges per 1,000 person-years."),
+    ("util_adm_rehab", "Discharges — Rehab / 1000", "ADM_Rehab", "per 1k", False, False, "utilization",
+     "Inpatient rehabilitation discharges per 1,000 person-years."),
+    ("util_ed_visits", "ED Visits / 1000", "P_EDV_Vis", "per 1k", False, True, "utilization",
+     "All emergency department visits per 1,000 person-years."),
+    ("util_ed_hosp", "ED Visits Leading to Admission / 1000", "P_EDV_Vis_HOSP", "per 1k", False, True, "utilization",
+     "Emergency department visits that resulted in a hospital admission, per 1,000 person-years."),
+    ("util_ct", "CT Scans / 1000", "P_CT_VIS", "per 1k", False, False, "utilization",
+     "CT imaging events per 1,000 person-years."),
+    ("util_mri", "MRI Scans / 1000", "P_MRI_VIS", "per 1k", False, False, "utilization",
+     "MRI imaging events per 1,000 person-years."),
+    ("util_em_total", "Primary Care Services (E&M Total) / 1000", "P_EM_Total", "per 1k", None, True, "utilization",
+     "All evaluation & management services per 1,000 person-years. Two-sided: higher "
+     "ambulatory contact is often the mechanism by which acute utilization falls."),
+    ("util_em_pcp", "E&M — Primary Care / 1000", "P_EM_PCP_Vis", "per 1k", None, True, "utilization",
+     "Primary care E&M visits per 1,000 person-years. Two-sided, as above."),
+    ("util_em_spec", "E&M — Specialist / 1000", "P_EM_SP_Vis", "per 1k", None, True, "utilization",
+     "Specialist E&M visits per 1,000 person-years. Two-sided: appropriate specialty "
+     "access and specialty overuse both raise this."),
+    ("util_nurse", "Nurse Practitioner Visits / 1000", "P_Nurse_Vis", "per 1k", None, True, "utilization",
+     "Nurse practitioner / physician assistant visits per 1,000 person-years."),
+    ("util_fqhc_rhc", "FQHC / RHC Visits / 1000", "P_FQHC_RHC_Vis", "per 1k", None, False, "utilization",
+     "Federally qualified health center and rural health clinic visits per 1,000 person-years."),
+    ("util_snf_adm", "SNF Discharges / 1000", "P_SNF_ADM", "per 1k", False, True, "utilization",
+     "Skilled nursing facility discharges per 1,000 person-years."),
+    ("util_snf_los", "SNF Length of Stay (days)", "SNF_LOS", "days", False, True, "utilization",
+     "Average length of stay per SNF admission."),
+    ("util_snf_pay", "SNF Payment per Stay", "SNF_PayperStay", "$", False, False, "utilization",
+     "Average Medicare payment per SNF stay."),
+]
+
+# Metrics CMS publishes as a proportion (0.1647) where every sibling metric on
+# the same unit is published on a 0-100 scale. Rescaled once, at build time, so
+# cohort percentiles and rendering agree. Measure_479 is the readmission rate:
+# 0.1647 is 16.47%, and rendering it as "0.16%" understates it 100-fold.
+RESCALE_X100 = {"readmits_proxy"}
 
 
 # ---------------------------------------------------------------------------
@@ -238,15 +334,26 @@ QUALITY_FLAGS = [
      "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.", "high"),
     ("Report_eCQM_CQM_MedicareCQM", "Reported via eCQM / MIPS CQM / Medicare CQM",
      "Reporting mechanism used. Scores are not perfectly comparable across mechanisms.", "high"),
-    ("Met_Incentive", "Qualified for a quality incentive adjustment",
-     "122 ACOs in PY2024, all of which also met the QPS. Their median quality score (79.69) "
-     "sits below that of non-recipients (83.89), consistent with an adjustment that supports "
-     "ACOs serving higher-need populations. Confirm the exact basis in the data dictionary "
-     "before asserting it to a client.", "verify"),
-    ("Recvd40p", "Received 40th-percentile treatment",
-     "35 ACOs in PY2024, all of which also met the 40th-percentile threshold, with a median "
-     "quality score of 77.05 — right at the cliff boundary. Exact meaning should be confirmed "
-     "against the data dictionary.", "verify"),
+    # Confirmed against the CMS data dictionary (supplied by the actuarial
+    # reviewer, Aug 2026). An earlier build inferred Met_Incentive from data
+    # relationships and read it as a needs-based adjustment. That was wrong:
+    # it is a REPORTING incentive tied to eCQM/MIPS CQM submission. The
+    # inferred reading is recorded here only so it is not re-derived.
+    ("Met_Incentive", "Met eCQM / MIPS CQM reporting incentive criteria",
+     "Qualifies for the eCQM/MIPS CQM reporting incentive. For PY2024 an ACO qualifies if it "
+     "reports all three eCQMs/MIPS CQMs, meets the MIPS data completeness requirement for all "
+     "three, and scores at or above the 10th percentile of the performance benchmark on at "
+     "least one of the four outcome measures in the APP set AND at or above the 40th "
+     "percentile on at least one of the remaining five measures. Does not apply to Medicare "
+     "CQMs. Eligibility is determined independently of the measures that feed the ACO's "
+     "quality score — so this flag says nothing about quality performance itself.", "high"),
+    ("Recvd40p", "Quality score floored at the 40th percentile (extreme & uncontrollable circumstances)",
+     "Set when an ACO was determined to be affected by an extreme and uncontrollable "
+     "circumstance in PY2024, in which case its quality score is set to the higher of its own "
+     "score or the equivalent of the 40th-percentile MIPS quality performance category score "
+     "across all MIPS scores, excluding entities eligible for facility-based scoring. Low "
+     "analytic value: it is uncommon by design and reflects a disaster adjustment rather than "
+     "ACO performance. Do not use it to explain a quality result.", "high"),
 ]
 
 
@@ -276,19 +383,88 @@ def _size_band(n):
     return "100K+ lives"
 
 
+# CMS uses two visually similar but semantically different null sentinels.
+# Conflating them loses real information: '-' means the field does not apply
+# to this ACO, '*' means CMS computed a value and withheld it because the cell
+# was too small to publish. Both are NaN numerically; only the second one means
+# "this ACO has a value you are not allowed to see."
+NULL_NOT_APPLICABLE = {"", "-", "--", ".", "NA", "N/A", "NULL", "Not published"}
+NULL_SUPPRESSED = {"*", "**"}
+
+
 def _to_num(s):
-    """CMS uses '-' for not-applicable; coerce everything else to float."""
+    """Coerce a CMS PUF cell to float, or NaN.
+
+    The PUF is not internally consistent across performance years. PY2024
+    publishes rate fields as bare floats (8.89); PY2023 publishes the SAME
+    fields as percent-formatted strings ('9.09%'). Nine columns are affected
+    in PY2023 — Sav_rate, MinSavPerc, QualScore, FinalShareRate,
+    FinalLossRate, Perc_Dual, Perc_CovDiag, Perc_CovEpisode, Perc_LTI — and
+    every one of them silently became NaN before the '%' strip was added here.
+
+    Both years express these on a 0-100 scale ('9.09%' -> 9.09, matching
+    PY2024's 8.89), so stripping the suffix is sufficient. Do NOT rescale.
+    """
     if pd.isna(s):
         return np.nan
     if isinstance(s, (int, float, np.integer, np.floating)):
         return float(s)
-    s = str(s).strip().replace(",", "").replace("$", "")
-    if s in {"", "-", "NA", "N/A", "*"}:
+    s = str(s).strip().replace(",", "").replace("$", "").replace("%", "")
+    if s in NULL_NOT_APPLICABLE or s in NULL_SUPPRESSED:
         return np.nan
     try:
         return float(s)
     except ValueError:
         return np.nan
+
+
+def _is_suppressed(s) -> bool:
+    """True when CMS withheld this cell for small cell size (as opposed to n/a)."""
+    return not pd.isna(s) and str(s).strip() in NULL_SUPPRESSED
+
+
+# ---------------------------------------------------------------------------
+# Cross-year column compatibility.
+#
+# CMS renamed several fields between PY2023 and PY2024. Two of the renames are
+# NOT cosmetic — the underlying percentile threshold moved from the 30th to the
+# 40th. Aliasing Met_30pctl onto Met_40pctl keeps one code path, but the label
+# shown to the user has to stay year-accurate or the tool will tell a 2023 ACO
+# it cleared a bar that did not exist that year. YEAR_THRESHOLD_LABELS carries
+# that correction downstream.
+# ---------------------------------------------------------------------------
+YEAR_ALIASES = {
+    2023: {
+        "PosRegAdj": "RegAdj",
+        "Met_30pctl": "Met_40pctl",
+        "Recvd30p": "Recvd40p",
+        "Report_eCQM_CQM": "Report_eCQM_CQM_MedicareCQM",
+    },
+}
+
+# Fields CMS simply did not publish in a given year. Left absent (NaN) rather
+# than defaulted, so they rank as "no data" instead of as a real zero.
+YEAR_UNAVAILABLE = {
+    2023: ["PriorSavAdj", "FinalAdjCat", "Met_SSP_quality_reporting_requirements"],
+}
+
+# Percentile threshold for the alternative quality standard, by year.
+YEAR_THRESHOLD_LABELS = {2023: "30th", 2024: "40th"}
+
+
+def apply_year_aliases(df: pd.DataFrame, year: int) -> pd.DataFrame:
+    """Map an older PUF's column names onto the current schema."""
+    aliases = YEAR_ALIASES.get(year, {})
+    present = {old: new for old, new in aliases.items()
+               if old in df.columns and new not in df.columns}
+    if present:
+        df = df.rename(columns=present)
+        print(f"  PY{year} column aliases applied: "
+              + ", ".join(f"{o}->{n}" for o, n in present.items()))
+    missing = [c for c in YEAR_UNAVAILABLE.get(year, []) if c not in df.columns]
+    if missing:
+        print(f"  PY{year} not published by CMS (left null): {', '.join(missing)}")
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -362,10 +538,19 @@ def add_derived_kpis(df: pd.DataFrame) -> pd.DataFrame:
     cat = (df["FinalAdjCat"].astype(str).str.strip().str.lower()
            if "FinalAdjCat" in df.columns else pd.Series("", index=df.index))
 
-    final = pd.Series(0.0, index=df.index)
-    final = final.mask(cat.str.contains("regional", na=False), reg)
-    final = final.mask(cat.str.contains("prior", na=False), psa)
-    final = final.fillna(0.0)
+    if "FinalAdjCat" in df.columns:
+        # CMS published which adjustment it selected, so the applied figure is
+        # knowable. "No Adjustment" genuinely means zero.
+        final = pd.Series(0.0, index=df.index)
+        final = final.mask(cat.str.contains("regional", na=False), reg)
+        final = final.mask(cat.str.contains("prior", na=False), psa)
+        final = final.fillna(0.0)
+    else:
+        # PY2023 published the regional adjustment but never disclosed which
+        # adjustment was applied. Defaulting to zero would put every 2023 ACO
+        # at $0 and rank them against each other on a number CMS never
+        # released, so this stays null and the KPI reads "not published".
+        final = pd.Series(np.nan, index=df.index)
     # --- 4. BY3 vintage -----------------------------------------------------
     # Benchmark years are the three years preceding the current agreement
     # period, so BY3 is the year before the agreement start. The gap between
@@ -449,8 +634,9 @@ def percentile_table(values: pd.Series) -> dict:
 
 
 def all_metric_keys() -> list[tuple[str, str]]:
-    """(key, source_column) for every rankable metric, financial + quality."""
+    """(key, source_column) for every rankable metric — financial, expense, quality."""
     pairs = [(k, src) for k, _l, src, _u, _h, _d in METRICS]
+    pairs += [(k, src) for k, _l, src, _u, _h, _i, _f, _d in EXPENSE_METRICS]
     pairs += [(k, k) for k, *_ in QUALITY_MEASURES]
     return pairs
 
@@ -478,11 +664,22 @@ def build_cohort_stats(df: pd.DataFrame, py_label: str) -> dict:
 def build_meta() -> dict:
     return {
         "data_vintage": DATA_VINTAGE,
+        # Stamped every build so a deployed instance can be identified on sight.
+        # DATA_VINTAGE describes which CMS file was used and does not change
+        # when the build logic changes — which made it impossible to tell a
+        # freshly deployed app from a stale one. This does change, every time.
+        "build_id": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
         "metric_definitions": [
             {"key": k, "label": l, "source_col": src, "unit": u,
              "higher_is_better": h, "description": d, "family": "financial",
              "vintage_sensitive": k in VINTAGE_SENSITIVE}
             for (k, l, src, u, h, d) in METRICS
+        ],
+        "expense_metrics": [
+            {"key": k, "label": l, "source_col": src, "unit": u,
+             "higher_is_better": h, "important": imp, "family": fam,
+             "description": d, "vintage_sensitive": False}
+            for (k, l, src, u, h, imp, fam, d) in EXPENSE_METRICS
         ],
         "quality_flags": [
             {"key": k, "label": l, "description": d, "confidence": c}
@@ -546,14 +743,32 @@ def main():
     print(f"  PY2024 source: {py24_path.name}")
     df24 = pd.read_csv(py24_path, low_memory=False)
     df23 = pd.read_csv(DATA / "PY2023_ACO_Results.csv", low_memory=False)
+    df23 = apply_year_aliases(df23, 2023)
 
     for df in (df24, df23):
         for _k, _l, src, _u, _h, _d in METRICS:
             if src in df.columns:
                 df[src] = df[src].apply(_to_num)
+        for _k, _l, src, _u, _h, _i, _f, _d in EXPENSE_METRICS:
+            if src in df.columns:
+                df[src] = df[src].apply(_to_num)
         for col in ("N_AB", "Current_Track", "Risk_Model", "Rev_Exp_Cat"):
             if col in df.columns and df[col].dtype == "object":
                 df[col] = df[col].astype(str).str.strip()
+
+    # Put proportion-scaled fields on the same 0-100 scale as their siblings.
+    # Done after coercion and before any percentile is computed, so cohort
+    # tables and rendered values can never disagree.
+    src_by_key = {k: src for k, _l, src, _u, _h, _d in METRICS}
+    for df, yr in ((df24, 2024), (df23, 2023)):
+        for key in RESCALE_X100:
+            src = src_by_key.get(key)
+            if src and src in df.columns:
+                before = df[src].dropna()
+                df[src] = df[src] * 100.0
+                if len(before):
+                    print(f"  PY{yr} {src} rescaled x100 "
+                          f"(median {before.median():.4f} -> {before.median()*100:.2f})")
 
     print("Computing derived KPIs...")
     df24["performance_year"] = 2024
@@ -594,17 +809,39 @@ def main():
         "generated_at": pd.Timestamp.utcnow().isoformat(),
         "data_vintage": DATA_VINTAGE,
         "metric_definitions": build_meta()["metric_definitions"],
+        "expense_metrics": build_meta()["expense_metrics"],
         "quality_measures": build_meta()["quality_measures"],
     }
     with open(COHORT_STATS_PATH, "w") as f:
         json.dump(stats, f, indent=2, default=str, allow_nan=False)
+
+    # Which metrics are structurally unavailable in each year, derived from
+    # actual coverage rather than a hardcoded list so it stays true as new
+    # performance years are added. A metric null for EVERY ACO in a year was
+    # not published by CMS that year; a metric null for only some ACOs simply
+    # does not apply to those ACOs. The UI needs to say different things.
+    unavailable_by_year = {}
+    for label, df in (("PY2024", df24), ("PY2023", df23)):
+        missing = []
+        for key, src in all_metric_keys():
+            if src not in df.columns:
+                missing.append(key)
+            elif pd.to_numeric(df[src], errors="coerce").notna().sum() == 0:
+                missing.append(key)
+        unavailable_by_year[label] = sorted(set(missing))
+        print(f"  {label} metrics not published by CMS: {len(missing)}"
+              + (f" ({', '.join(missing[:6])}{'...' if len(missing) > 6 else ''})"
+                 if missing else ""))
 
     print("Building per-ACO browser index...")
     base_cols = ["ACO_ID", "ACO_Name", "Current_Track", "Risk_Model", "Rev_Exp_Cat",
                  "N_AB", "Agreement_Period_Num", "Current_Start_Date", "EarnSaveLoss",
                  "final_adj_type", "by3_year", "by3_vintage"]
     base_cols += [c for c, *_ in QUALITY_FLAGS]
-    needed = base_cols + [src for _k, _l, src, _u, _h, _d in METRICS] + [k for k, *_ in QUALITY_MEASURES]
+    needed = (base_cols
+              + [src for _k, _l, src, _u, _h, _d in METRICS]
+              + [src for _k, _l, src, _u, _h, _i, _f, _d in EXPENSE_METRICS]
+              + [k for k, *_ in QUALITY_MEASURES])
 
     def clean(v):
         if v is None:
@@ -631,7 +868,8 @@ def main():
     with open(ACO_STATES_PATH, "w") as f:
         json.dump(aco_states, f)
     with open(META_PATH, "w") as f:
-        json.dump(build_meta(), f, indent=2)
+        json.dump({**build_meta(), "unavailable_by_year": unavailable_by_year},
+                  f, indent=2)
 
     print()
     print("=" * 68)

@@ -1,5 +1,6 @@
 {
   "data_vintage": "PY2024 PUF revised 2026-07-17",
+  "build_id": "2026-08-04 18:50 UTC",
   "metric_definitions": [
     {
       "key": "savings_rate",
@@ -78,6 +79,16 @@
       "unit": "days",
       "higher_is_better": false,
       "description": "Average SNF length of stay.",
+      "family": "financial",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "pc_services_per_1000",
+      "label": "Primary Care Services / 1000",
+      "source_col": "P_EM_Total",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "description": "All evaluation & management services per 1,000 person-years. Deliberately undirected: raising ambulatory contact is usually how an ACO drives acute utilization down, so a high value is not on its own a negative finding.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -192,6 +203,316 @@
       "vintage_sensitive": false
     }
   ],
+  "expense_metrics": [
+    {
+      "key": "cap_inp_all",
+      "label": "Inpatient \u2014 All",
+      "source_col": "CapAnn_INP_All",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": true,
+      "family": "cost",
+      "description": "Per-capita annualized inpatient spend, all inpatient settings combined.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_inp_short",
+      "label": "Inpatient \u2014 Short-Term",
+      "source_col": "CapAnn_INP_S_trm",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized short-term acute inpatient spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_inp_long",
+      "label": "Inpatient \u2014 Long-Term",
+      "source_col": "CapAnn_INP_L_trm",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized long-term care hospital spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_inp_rehab",
+      "label": "Inpatient \u2014 Rehab",
+      "source_col": "CapAnn_INP_Rehab",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized inpatient rehabilitation facility spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_inp_psych",
+      "label": "Inpatient \u2014 Psych",
+      "source_col": "CapAnn_INP_Psych",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized inpatient psychiatric facility spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_hospice",
+      "label": "Hospice",
+      "source_col": "CapAnn_HSP",
+      "unit": "$",
+      "higher_is_better": null,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized hospice spend. Two-sided: higher spend can reflect appropriate end-of-life care that displaces aggressive inpatient utilization.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_snf",
+      "label": "Skilled Nursing Facility",
+      "source_col": "CapAnn_SNF",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": true,
+      "family": "cost",
+      "description": "Per-capita annualized SNF spend \u2014 a primary post-acute lever in value-based care.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_opd",
+      "label": "Hospital Outpatient",
+      "source_col": "CapAnn_OPD",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": true,
+      "family": "cost",
+      "description": "Per-capita annualized hospital outpatient department spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_pb",
+      "label": "Physician / Professional",
+      "source_col": "CapAnn_PB",
+      "unit": "$",
+      "higher_is_better": null,
+      "important": true,
+      "family": "cost",
+      "description": "Per-capita annualized Part B professional services spend. Two-sided: higher professional spend may reflect stronger ambulatory access rather than waste.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_ambulance",
+      "label": "Ambulance",
+      "source_col": "CapAnn_AmbPay",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized ambulance spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_hha",
+      "label": "Home Health",
+      "source_col": "CapAnn_HHA",
+      "unit": "$",
+      "higher_is_better": null,
+      "important": false,
+      "family": "cost",
+      "description": "Per-capita annualized home health spend. Two-sided: home health frequently substitutes for more expensive SNF days.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "cap_dme",
+      "label": "Durable Medical Equipment",
+      "source_col": "CapAnn_DME",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": true,
+      "family": "cost",
+      "description": "Per-capita annualized DME spend.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_adm",
+      "label": "Inpatient Discharges / 1000",
+      "source_col": "ADM",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": true,
+      "family": "utilization",
+      "description": "Acute inpatient discharges per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_adm_short",
+      "label": "Discharges \u2014 Short-Term / 1000",
+      "source_col": "ADM_S_Trm",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "Short-term acute inpatient discharges per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_adm_long",
+      "label": "Discharges \u2014 Long-Term / 1000",
+      "source_col": "ADM_L_Trm",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "Long-term care hospital discharges per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_adm_rehab",
+      "label": "Discharges \u2014 Rehab / 1000",
+      "source_col": "ADM_Rehab",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "Inpatient rehabilitation discharges per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_ed_visits",
+      "label": "ED Visits / 1000",
+      "source_col": "P_EDV_Vis",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": true,
+      "family": "utilization",
+      "description": "All emergency department visits per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_ed_hosp",
+      "label": "ED Visits Leading to Admission / 1000",
+      "source_col": "P_EDV_Vis_HOSP",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": true,
+      "family": "utilization",
+      "description": "Emergency department visits that resulted in a hospital admission, per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_ct",
+      "label": "CT Scans / 1000",
+      "source_col": "P_CT_VIS",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "CT imaging events per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_mri",
+      "label": "MRI Scans / 1000",
+      "source_col": "P_MRI_VIS",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "MRI imaging events per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_em_total",
+      "label": "Primary Care Services (E&M Total) / 1000",
+      "source_col": "P_EM_Total",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "important": true,
+      "family": "utilization",
+      "description": "All evaluation & management services per 1,000 person-years. Two-sided: higher ambulatory contact is often the mechanism by which acute utilization falls.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_em_pcp",
+      "label": "E&M \u2014 Primary Care / 1000",
+      "source_col": "P_EM_PCP_Vis",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "important": true,
+      "family": "utilization",
+      "description": "Primary care E&M visits per 1,000 person-years. Two-sided, as above.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_em_spec",
+      "label": "E&M \u2014 Specialist / 1000",
+      "source_col": "P_EM_SP_Vis",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "important": true,
+      "family": "utilization",
+      "description": "Specialist E&M visits per 1,000 person-years. Two-sided: appropriate specialty access and specialty overuse both raise this.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_nurse",
+      "label": "Nurse Practitioner Visits / 1000",
+      "source_col": "P_Nurse_Vis",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "important": true,
+      "family": "utilization",
+      "description": "Nurse practitioner / physician assistant visits per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_fqhc_rhc",
+      "label": "FQHC / RHC Visits / 1000",
+      "source_col": "P_FQHC_RHC_Vis",
+      "unit": "per 1k",
+      "higher_is_better": null,
+      "important": false,
+      "family": "utilization",
+      "description": "Federally qualified health center and rural health clinic visits per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_snf_adm",
+      "label": "SNF Discharges / 1000",
+      "source_col": "P_SNF_ADM",
+      "unit": "per 1k",
+      "higher_is_better": false,
+      "important": true,
+      "family": "utilization",
+      "description": "Skilled nursing facility discharges per 1,000 person-years.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_snf_los",
+      "label": "SNF Length of Stay (days)",
+      "source_col": "SNF_LOS",
+      "unit": "days",
+      "higher_is_better": false,
+      "important": true,
+      "family": "utilization",
+      "description": "Average length of stay per SNF admission.",
+      "vintage_sensitive": false
+    },
+    {
+      "key": "util_snf_pay",
+      "label": "SNF Payment per Stay",
+      "source_col": "SNF_PayperStay",
+      "unit": "$",
+      "higher_is_better": false,
+      "important": false,
+      "family": "utilization",
+      "description": "Average Medicare payment per SNF stay.",
+      "vintage_sensitive": false
+    }
+  ],
   "quality_flags": [
     {
       "key": "Met_QPS",
@@ -237,15 +558,15 @@
     },
     {
       "key": "Met_Incentive",
-      "label": "Qualified for a quality incentive adjustment",
-      "description": "122 ACOs in PY2024, all of which also met the QPS. Their median quality score (79.69) sits below that of non-recipients (83.89), consistent with an adjustment that supports ACOs serving higher-need populations. Confirm the exact basis in the data dictionary before asserting it to a client.",
-      "confidence": "verify"
+      "label": "Met eCQM / MIPS CQM reporting incentive criteria",
+      "description": "Qualifies for the eCQM/MIPS CQM reporting incentive. For PY2024 an ACO qualifies if it reports all three eCQMs/MIPS CQMs, meets the MIPS data completeness requirement for all three, and scores at or above the 10th percentile of the performance benchmark on at least one of the four outcome measures in the APP set AND at or above the 40th percentile on at least one of the remaining five measures. Does not apply to Medicare CQMs. Eligibility is determined independently of the measures that feed the ACO's quality score \u2014 so this flag says nothing about quality performance itself.",
+      "confidence": "high"
     },
     {
       "key": "Recvd40p",
-      "label": "Received 40th-percentile treatment",
-      "description": "35 ACOs in PY2024, all of which also met the 40th-percentile threshold, with a median quality score of 77.05 \u2014 right at the cliff boundary. Exact meaning should be confirmed against the data dictionary.",
-      "confidence": "verify"
+      "label": "Quality score floored at the 40th percentile (extreme & uncontrollable circumstances)",
+      "description": "Set when an ACO was determined to be affected by an extreme and uncontrollable circumstance in PY2024, in which case its quality score is set to the higher of its own score or the equivalent of the 40th-percentile MIPS quality performance category score across all MIPS scores, excluding entities eligible for facility-based scoring. Low analytic value: it is uncommon by design and reflects a disaster adjustment rather than ACO performance. Do not use it to explain a quality result.",
+      "confidence": "high"
     }
   ],
   "quality_measures": [
@@ -515,5 +836,12 @@
     "performance": "https://data.cms.gov/medicare-shared-savings-program/performance-year-financial-and-quality-results",
     "participants": "https://data.cms.gov/medicare-shared-savings-program/accountable-care-organization-participants",
     "data_dictionary": "https://data.cms.gov/resources/performance-year-financial-and-quality-results-data-dictionary"
+  },
+  "unavailable_by_year": {
+    "PY2024": [],
+    "PY2023": [
+      "final_adj",
+      "prior_sav_adj"
+    ]
   }
 }
