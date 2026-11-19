@@ -428,8 +428,11 @@ def shared_savings(aco_id: str, performance_year: int = 2024, cohort: str = "tra
 
 # Outcome measures in the APP measure set; the alternative quality standard is judged on these.
 OUTCOME_MEASURES = {"q_diabetes_hba1c_poor", "q_bp_control", "q_readmission", "q_admissions_mcc"}
-# Measures that can come from either the Web Interface or eCQM/MIPS CQM/Medicare CQM reporting.
+# Measures reportable by several methods, whose rates aren't comparable across methods; each
+# is ranked and averaged only among ACOs that used the same method (build_data's __source).
 DUAL_REPORTED = {"q_diabetes_hba1c_poor", "q_bp_control", "q_depression_screen"}
+_METHOD_LABELS = {"WI": "Web Interface", "eCQM": "eCQM", "MIPSCQM": "MIPS CQM",
+                  "MedicareCQM": "Medicare CQM"}
 
 
 def measure_id(key: str) -> str:
@@ -448,27 +451,25 @@ def collection_type(key: str, row: dict) -> str:
         return "Administrative claims"
     if key not in DUAL_REPORTED:
         return "Web Interface"
-    wi, ecqm = _num(row.get("Report_WI")) == 1, _num(row.get("Report_eCQM_CQM_MedicareCQM")) == 1
-    if wi and not ecqm:
-        return "Web Interface"
-    if ecqm and not wi:
-        return "eCQM / MIPS CQM / Medicare CQM"
-    return "Web Interface or eCQM / CQM"
+    source = row.get(f"{key}__source") or ""
+    return _METHOD_LABELS.get(source.rsplit("_", 1)[-1], "Unknown")
 
 
-_MEASURE_MEANS: dict[int, dict[str, float]] = {}
+_MEASURE_MEANS: dict[int, dict[tuple[str, str | None], float]] = {}
 
 
-def measure_means(performance_year: int) -> dict[str, float]:
-    """Mean rate of every reporting ACO, per measure: CMS's 'current year mean (SSP ACOs)'."""
+def measure_means(performance_year: int) -> dict[tuple[str, str | None], float]:
+    """Mean rate per (measure, reporting source): CMS's 'current year mean (SSP ACOs)'.
+
+    The source is None for measures with a single reporting method."""
     if performance_year not in _MEASURE_MEANS:
-        rows = aco_index().get(f"PY{performance_year}", [])
-        means = {}
-        for key in QUALITY_DEFS:
-            vals = [v for v in (_num(r.get(key)) for r in rows) if v is not None]
-            if vals:
-                means[key] = sum(vals) / len(vals)
-        _MEASURE_MEANS[performance_year] = means
+        groups: dict[tuple[str, str | None], list[float]] = {}
+        for r in aco_index().get(f"PY{performance_year}", []):
+            for key in QUALITY_DEFS:
+                v = _num(r.get(key))
+                if v is not None:
+                    groups.setdefault((key, r.get(f"{key}__source")), []).append(v)
+        _MEASURE_MEANS[performance_year] = {k: sum(v) / len(v) for k, v in groups.items()}
     return _MEASURE_MEANS[performance_year]
 
 
@@ -489,7 +490,9 @@ def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 
     measures = []
     for key, qdef in QUALITY_DEFS.items():
         value = _num(row.get(key))
-        pvals = [_num(p.get(key)) for p in peers]
+        source = row.get(f"{key}__source")
+        same_method = [p for p in peers if p.get(f"{key}__source") == source]
+        pvals = [_num(p.get(key)) for p in same_method]
         r = _rank_exact(value, pvals, qdef["higher_is_better"])
         if r["performance_pct"] is None:
             continue
@@ -498,7 +501,7 @@ def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 
             "higher_is_better": qdef["higher_is_better"],
             "description": qdef["description"], "measure_id": measure_id(key),
             "collection": collection_type(key, row), "outcome": key in OUTCOME_MEASURES,
-            "aco_mean": means.get(key), **r,
+            "aco_mean": means.get((key, source)), "same_method": key in DUAL_REPORTED, **r,
         })
 
     measures.sort(key=lambda m: m["performance_pct"])

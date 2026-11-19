@@ -532,6 +532,91 @@ def quality_takeaway(name: str, py: int, flags: dict, score: dict, group: str,
     return f'<div class="takeaway t-{tone}">{first} {second}</div>'
 
 
+def _rank_phrase(c: dict | None, pick: str) -> str:
+    """'above average (p71) against Regional peers (CA)', or '' without a comparison."""
+    if not c or c.get("performance_pct") is None:
+        return ""
+    p = c["performance_pct"]
+    return f"{perf_word(p).lower()} (p{p:.0f}) against {group_label(pick, c['cohort_value'])}"
+
+
+def performance_takeaway(rep: dict, pick: str, savings: dict | None, flags: dict, name: str,
+                         py: int) -> str:
+    """Two-sentence read of the headline boxes: the savings result, then the best and worst KPI."""
+    name = html.escape(name)
+    sr = rep["metrics"]["savings_rate"]
+    rate = f"{fmt(sr['value'], '%')} savings rate"
+    ranked = _rank_phrase(sr["comparisons"].get(pick), pick)
+    on_rate = f" on a {rate}" + (f", {ranked}" if ranked else "")
+    total = savings["total"] if savings else None
+    if total and total > 0:
+        tone, first = "good", f"<b>{name} earned {fmt_money_short(total)} in shared savings for PY{py}</b>{on_rate}."
+    elif total and total < 0:
+        tone, first = "bad", f"<b>{name} owed {fmt_money_short(-total)} in shared losses for PY{py}</b>{on_rate}."
+    else:
+        tone, first = "mid", f"<b>{name} earned no shared savings payment for PY{py}</b>{on_rate}."
+
+    others = []
+    for key, short in (("quality_score", "quality score"), ("expense_trend_by3_py", "medical expense trend"),
+                       ("risk_ratio_by3_py", "risk score ratio"), ("reg_adj", "regional adjustment")):
+        c = rep["metrics"][key]["comparisons"].get(pick)
+        if c and c.get("performance_pct") is not None:
+            others.append((c["performance_pct"], short))
+    second = ""
+    if len(others) >= 2:
+        (lo, lo_name), (hi, hi_name) = min(others), max(others)
+        second = (f"Of its other headline results, the strongest is {hi_name} "
+                  f"({perf_word(hi).lower()}, p{hi:.0f}) and the weakest is {lo_name} "
+                  f"({perf_word(lo).lower()}, p{lo:.0f}).")
+    if flags.get("Met_QPS", {}).get("state") == "No":
+        second += " It missed CMS's quality performance standard, which reduces its sharing rate."
+    return f'<div class="takeaway t-{tone}">{first} {second}</div>'.replace("$", "&#36;")
+
+
+def expense_boxes(rep: dict, pick: str) -> str:
+    boxes = [metric_box(rep, "per_capita_exp", "Total Per-Capita Expenditure", pick),
+             metric_box(rep, "expense_trend_by3_py", "Medical Expense Trend (BY3 → PY)", pick),
+             metric_box(rep, "risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)", pick)]
+    return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
+
+
+def expense_takeaway(rep: dict, pick: str, ep: dict, name: str, py: int) -> str:
+    """Cost growth against risk growth since BY3, then the biggest gaps and strongest areas."""
+    name = html.escape(name)
+    tr_m, rr_m = rep["metrics"]["expense_trend_by3_py"], rep["metrics"]["risk_ratio_by3_py"]
+    tr, rr, by3 = tr_m["value"], rr_m["value"], rep["aco"].get("by3_year")
+
+    def change(ratio: float) -> str:
+        return f"{'grew' if ratio >= 1 else 'fell'} {abs(ratio - 1) * 100:.1f}%"
+
+    c = tr_m["comparisons"].get(pick)
+    tone = perf_tier(c.get("performance_pct")) if c else "neut"
+    if tr is not None and rr is not None:
+        verdict = ("cost is rising faster than documented acuity explains" if tr > rr
+                   else "cost growth is matched by documented acuity")
+        first = (f"<b>{name}'s per-capita cost {change(tr)} from BY3 {int(by3)} to PY{py} while "
+                 f"documented risk {change(rr)}</b>, so {verdict}.")
+        ranked = _rank_phrase(c, pick)
+        if ranked:
+            first += f" Its expense trend is {ranked}, same BY3 vintage."
+    else:
+        first = f"<b>CMS did not publish {name}'s BY3 → PY expense trend for PY{py}.</b>"
+
+    def items(ms: list[dict]) -> str:
+        return " and ".join(f"{m['label']} ({fmt(m['value'], m['unit'])} vs a "
+                            f"{fmt(m['cohort_p50'], m['unit'])} median, p{m['performance_pct']:.0f})"
+                            for m in ms)
+    gaps = [m for m in ep["biggest_gaps"] if m["performance_pct"] < 40][:2]
+    strong = [m for m in ep["top_strengths"] if m["performance_pct"] >= 60][:2]
+    parts = []
+    if gaps:
+        parts.append(f"its biggest gaps are {items(gaps)}")
+    if strong:
+        parts.append(f"its strongest areas are {items(strong)}")
+    second = ("Against " + cohort_text(ep["cohort"]) + ", " + "; ".join(parts) + ".") if parts else ""
+    return f'<div class="takeaway t-{tone}">{first} {second}</div>'.replace("$", "&#36;")
+
+
 # (label, flag key, indented under the row above, bold, a pass/fail gate rather than a fact)
 QUALITY_DETERMINATION = [
     ("Met Shared Savings Program quality reporting requirements",
@@ -574,6 +659,11 @@ def determination_table(score_text: str, flags: dict) -> str:
             f'<th>Result</th></tr></thead><tbody>{"".join(rows)}</tbody></table>')
 
 
+def measure_group(m: dict, group: str) -> str:
+    """Multi-method measures (001, 134, 236) are compared only within the ACO's reporting method."""
+    return f"{group}, {m['collection']} reporters only" if m.get("same_method") else group
+
+
 def measure_table(items: list[dict], title: str, subtitle: str, group: str,
                   with_collection: bool) -> str:
     """CMS Table 3 / Table 5 layout: measure #, title, rate, SSP ACO mean, plus our rating."""
@@ -595,7 +685,7 @@ def measure_table(items: list[dict], title: str, subtitle: str, group: str,
                     + (f'<td class="txt">{m["collection"]}</td>' if with_collection else '')
                     + f'<td class="val">{fmt(m["value"], "measure")}</td>'
                     + f'<td class="val">{fmt(m["aco_mean"], "measure")}</td>'
-                    + pct_cell(m, "measure", group) + '</tr>')
+                    + pct_cell(m, "measure", measure_group(m, group)) + '</tr>')
     return (f'<table class="bm cms"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
             .replace("$", "&#36;"))
 
@@ -686,6 +776,8 @@ tabs = st.tabs(["🔎 ACO Performance", "🩺 Quality Performance", "💵 Medica
 # ================================================================ TAB 1
 with tabs[0]:
     if aco_id:
+        st.markdown(performance_takeaway(rep, pick, engine.shared_savings(aco_id, py, pick, vintage_only),
+                                         fl, a["aco_name"], py), unsafe_allow_html=True)
         st.markdown("#### Financial benchmark")
         qps = fl.get("Met_QPS", {}).get("state")
         st.markdown(benchmark_table(rep, FIN_ORDER, focus, engine.cohort_sizes(aco_id, py), qps),
@@ -765,7 +857,7 @@ with tabs[1]:
                               ["lower is better"] if mm["higher_is_better"] is False else [],
                               mm["description"]),
                     fmt(mm["value"], "measure"),
-                    pct_cell(mm, "measure", group)) for mm in items]
+                    pct_cell(mm, "measure", measure_group(mm, group))) for mm in items]
 
             g1, g2 = st.columns(2)
             with g1:
@@ -794,8 +886,10 @@ with tabs[1]:
             cahps = [mm for mm in qp["measures"] if mm["measure_id"].startswith("CAHPS")]
             st.markdown("##### Measure results")
             st.caption("Laid out like CMS Table 3. SSP ACO mean is the average rate of every ACO "
-                       "reporting the measure this year. Outcome measures are the ones the "
-                       "alternative quality standard is judged on.")
+                       "reporting the measure this year. Measures 001, 134 and 236 can be reported "
+                       "several ways that aren't comparable, so their mean and rating use only ACOs "
+                       "that reported the same way. Outcome measures are the ones the alternative "
+                       "quality standard is judged on.")
             st.markdown(measure_table(measures, title, subtitle, group, with_collection=True),
                         unsafe_allow_html=True)
             if cahps:
@@ -866,33 +960,8 @@ with tabs[2]:
             a = ep["aco"]
             title, subtitle = cohort_header(c)
             group = cohort_text(c)
-            m1, m2 = st.columns(2)
-            m1.metric("Total per-capita expenditure", fmt(a["per_capita_exp"], "$"))
-            m2.metric("Peer cohort size", c["n_peers"],
-                      help="ACOs used for every metric on this tab except the BY3 → PY ratios.")
-
-            st.markdown("##### BY3 → PY trend")
-            by3_n = max((m["cohort_n"] for m in ep["by3_metrics"]), default=0)
-            st.markdown(rank_table(title, f'{c["value"]} · {a["by3_vintage"]} · {by3_n} ACOs',
-                                   [table_row(
-                name_cell(m["label"], ["BY3"]), fmt(m["value"], m["unit"]),
-                pct_cell(m, m["unit"], f'{title}: {c["value"]}'))
-                for m in ep["by3_metrics"]]), unsafe_allow_html=True)
-
-            # Cost trend read in isolation is misleading: an ACO whose documented
-            # risk grew faster than its spend is arguably improving efficiency.
-            tr, rr = a["expense_trend_by3_py"], a["risk_ratio_by3_py"]
-            if tr and rr:
-                if tr > rr:
-                    st.markdown('<div class="warnbox">Expense trend is outpacing risk-score '
-                                f'growth ({tr * 100:.2f}% vs {rr * 100:.2f}%). Cost is rising '
-                                'faster than documented acuity explains.</div>',
-                                unsafe_allow_html=True)
-                else:
-                    st.markdown('<div class="okbox">Expense trend is running at or below '
-                                f'risk-score growth ({tr * 100:.2f}% vs {rr * 100:.2f}%), so '
-                                'per-capita cost growth is at least matched by documented '
-                                'acuity.</div>', unsafe_allow_html=True)
+            st.markdown(expense_boxes(rep, pick), unsafe_allow_html=True)
+            st.markdown(expense_takeaway(rep, pick, ep, a["aco_name"], py), unsafe_allow_html=True)
             if c["small_sample"]:
                 st.markdown('<div class="warnbox">Small peer cohort — treat these '
                             'comparisons as directional.</div>', unsafe_allow_html=True)

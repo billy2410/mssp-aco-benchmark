@@ -855,7 +855,10 @@ def main():
     needed = (base_cols
               + [src for _k, _l, src, _u, _h, _d in METRICS]
               + [src for _k, _l, src, _u, _h, _i, _f, _d in EXPENSE_METRICS]
-              + [k for k, *_ in QUALITY_MEASURES])
+              + [k for k, *_ in QUALITY_MEASURES]
+              # Which reporting method each multi-method measure came from, so the app can
+              # compare an ACO only against ACOs that reported the same way.
+              + [f"{k}__source" for k, *_ in QUALITY_MEASURES])
 
     def clean(v):
         if v is None:
