@@ -70,6 +70,11 @@ st.markdown("""
   .kpi .k-val{font-size:1.45rem;font-weight:800;line-height:1.2;margin:2px 0 4px}
   .kpi .k-track{margin:12px 6px}
   .kpi .k-sub{font-size:.72rem;color:#64748b;margin-top:6px}
+  .kpi.flag-yes{background:rgba(22,163,74,.13);border-color:rgba(22,163,74,.6)}
+  .kpi.flag-no{background:rgba(220,38,38,.13);border-color:rgba(220,38,38,.6)}
+  .kpi.flag-na{background:rgba(100,116,139,.13);border-color:rgba(100,116,139,.55)}
+  .kpi.flag-yes .k-val{color:#16a34a} .kpi.flag-no .k-val{color:#dc2626}
+  .kpi.flag-na .k-val{color:#64748b}
   .k-track{position:relative;height:4px;border-radius:2px;background:rgba(128,128,128,.35)}
   .k-mid{position:absolute;left:50%;top:-4px;width:2px;height:12px;background:rgba(128,128,128,.7)}
   .k-dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
@@ -269,11 +274,6 @@ def preferred_for(metric: dict, focus: str | None):
     return ("regional", "track", "rev_cat", "size_band", "all")
 
 
-def flag_pill(state: str) -> str:
-    cls = {"Yes": "p-good", "No": "p-bad"}.get(state, "p-neut")
-    return f'<span class="pill {cls}">{state}</span>'
-
-
 def flags_by_key(flags: list[dict]) -> dict:
     return {f["key"]: f for f in (flags or [])}
 
@@ -425,13 +425,61 @@ def kpi_box(label: str, value: str, r: dict | None, unit, higher_is_better, grou
             f'<div class="k-val">{value}</div>{rating_html}{sub_html}</div>')
 
 
+def group_label(pick: str, value: str) -> str:
+    """'Track: ENHANCED', or the value alone when it already names the group ('Regional peers (CA)')."""
+    base = COHORT_LABELS.get(pick, pick)
+    return value if value.lower().startswith(base.lower()) else f"{base}: {value}"
+
+
+def metric_box(rep: dict, key: str, label: str, pick: str) -> str:
+    m = rep["metrics"][key]
+    c = m["comparisons"].get(pick)
+    group = group_label(pick, c["cohort_value"]) if c else COHORT_LABELS.get(pick, pick)
+    vint = ", same BY3 vintage" if c and c.get("same_vintage") else ""
+    sub = f'vs {group}{vint} · {c["cohort_n"]} ACOs' if c else ""
+    return kpi_box(label, fmt(m["value"], m["unit"]), c, m["unit"], m["higher_is_better"], group, sub)
+
+
+# (flag key, box label, plain-language note for Yes / No / N/A)
+QUALITY_GATES = [
+    ("Met_SSP_quality_reporting_requirements", "Met Quality Reporting Requirements",
+     {"Yes": "Reported the quality data the program requires",
+      "No": "Incomplete reporting: cannot meet the quality standard",
+      "N/A": "Not published in this year's CMS file"}),
+    ("Met_QPS", "Met Quality Performance Standard",
+     {"Yes": "Qualifies for its track's full sharing rate",
+      "No": "Missed: sharing rate is scaled down or forfeited",
+      "N/A": "Not published in this year's CMS file"}),
+    ("Met_AltQPS", "Met Alternative Quality Standard",
+     {"Yes": "Missed the main standard but met this backup: savings shared at a scaled rate",
+      "No": "Missed both standards: not eligible to share savings",
+      "N/A": "Not needed: the main standard was met"}),
+]
+
+
+def flag_box(label: str, flag: dict | None, notes: dict) -> str:
+    """Yes / No / N/A box tinted green, red or gray; hover shows the flag's definition."""
+    state = flag["state"] if flag and flag["state"] in ("Yes", "No") else "N/A"
+    tip = html.escape(flag["description"]) if flag else ""
+    return (f'<div class="kpi flag-{state.replace("/", "").lower()}" title="{tip}">'
+            f'<div class="k-lbl">{html.escape(label)}</div><div class="k-val">{state}</div>'
+            f'<div class="k-sub">{html.escape(notes[state])}</div></div>')
+
+
+def quality_boxes(rep: dict, pick: str, flags: dict) -> str:
+    boxes = [metric_box(rep, "quality_score", "Composite Quality Score", pick)]
+    # Under the EUC (disaster) policy an ACO that couldn't report is assigned the 40th-percentile
+    # score and still meets the standard, so "No" on reporting isn't disqualifying for it.
+    euc = flags.get("Recvd40p", {}).get("state") == "Yes"
+    for key, label, notes in QUALITY_GATES:
+        if euc and key == "Met_SSP_quality_reporting_requirements":
+            notes = {**notes, "No": "Not reported, but excused under CMS's disaster (EUC) policy"}
+        boxes.append(flag_box(label, flags.get(key), notes))
+    return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
+
+
 def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
     """The six headline KPIs vs the selected group; BY3 → PY ratios use same-vintage peers."""
-    base = COHORT_LABELS.get(pick, pick)
-
-    def group_of(value: str) -> str:
-        return value if value.lower().startswith(base.lower()) else f"{base}: {value}"
-
     boxes = []
     for key, label in (("savings_rate", "Savings Rate"), ("shared_savings", "Shared Savings / Losses"),
                        ("quality_score", "Quality Score"),
@@ -442,7 +490,7 @@ def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
             if not savings:
                 continue
             total = savings["total"]
-            group = group_of(savings["cohort"]["value"])
+            group = group_label(pick, savings["cohort"]["value"])
             vint = ", same BY3 vintage" if savings.get("same_vintage") else ""
             sub = ("No shared savings earned" if not total else
                    f'{fmt(abs(savings["per_beneficiary"]), "$")} per beneficiary'
@@ -450,13 +498,7 @@ def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
                    f'{savings["cohort_n"]} ACOs')
             boxes.append(kpi_box(label, fmt_money_short(total), savings, "$", True, group, sub))
             continue
-        m = rep["metrics"][key]
-        c = m["comparisons"].get(pick)
-        group = group_of(c["cohort_value"]) if c else base
-        vint = ", same BY3 vintage" if c and c.get("same_vintage") else ""
-        sub = f'vs {group}{vint} · {c["cohort_n"]} ACOs' if c else ""
-        boxes.append(kpi_box(label, fmt(m["value"], m["unit"]), c, m["unit"],
-                             m["higher_is_better"], group, sub))
+        boxes.append(metric_box(rep, key, label, pick))
     return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
 
 
@@ -575,23 +617,13 @@ with tabs[1]:
         else:
             c = qp["cohort"]
             qfl = flags_by_key(qp["aco"].get("quality_flags"))
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Composite quality score", f'{qp["aco"]["quality_score"]:.2f}'
-                      if qp["aco"]["quality_score"] else "—")
+            # The gates matter more to the economics than the score does.
+            st.markdown(quality_boxes(rep, pick, qfl), unsafe_allow_html=True)
+            m2, m3, m4 = st.columns(3)
             m2.metric("Measures reported", len(qp["measures"]))
             m3.metric("Below cohort median", len([x for x in qp["measures"]
                                                   if x["performance_pct"] < 50]))
             m4.metric("Peer cohort size", c["n_peers"])
-
-            # The gate matters more to the economics than the score does.
-            g1, g2 = st.columns(2)
-            for col, key, label in ((g1, "Met_QPS", "Met Quality Performance Standard"),
-                                    (g2, "Met_AltQPS", "Met Alternative Standard")):
-                f = qfl.get(key)
-                if f:
-                    with col:
-                        st.markdown(f'<div class="lbl">{label}</div>{flag_pill(f["state"])}',
-                                    unsafe_allow_html=True)
             if qfl.get("Met_QPS", {}).get("value") == 0:
                 st.markdown('<div class="warnbox">This ACO missed the primary quality gate. '
                             'Its sharing rate is reduced regardless of where individual measures '
