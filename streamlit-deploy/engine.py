@@ -396,6 +396,28 @@ def benchmark_synthetic(metric_values: dict[str, float],
 # ---------------------------------------------------------------------------
 # Quality profiling
 # ---------------------------------------------------------------------------
+def shared_savings(aco_id: str, performance_year: int = 2024, cohort: str = "track",
+                   vintage_only: bool = False) -> dict | None:
+    """Earned shared savings (losses negative), ranked per beneficiary so ACO size doesn't
+    drive the percentile."""
+    row = get_aco(aco_id, performance_year)
+    if not row:
+        return None
+    rows = aco_index().get(f"PY{performance_year}", [])
+    cohort, cvalue, peers = _group_peers(row, aco_id, cohort, rows)
+    if vintage_only:
+        peers = _same_vintage(peers, row)
+
+    def per_beneficiary(r: dict) -> float | None:
+        total, n = _num(r.get("EarnSaveLoss")), _num(r.get("N_AB"))
+        return total / n if total is not None and n else None
+
+    mine = per_beneficiary(row)
+    return {"total": _num(row.get("EarnSaveLoss")), "per_beneficiary": mine,
+            "cohort": {"name": cohort, "value": cvalue}, "same_vintage": vintage_only,
+            **_rank_exact(mine, [per_beneficiary(p) for p in peers], True)}
+
+
 def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 2024,
                     vintage_only: bool = False) -> dict | None:
     """Every quality measure ranked against one cohort, split into

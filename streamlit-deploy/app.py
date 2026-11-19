@@ -66,6 +66,21 @@ st.markdown("""
   table.bm .sub{font-size:.74rem;color:#64748b}
   table.bm.compact td.pct{width:84px}
   .legend span{display:inline-block;width:11px;height:11px;border-radius:2px;margin:0 4px -1px 10px}
+  .kpis{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
+  .kpi{flex:1 1 180px;border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:12px 14px;
+    background:rgba(128,128,128,.05);cursor:help}
+  .kpi .k-lbl{font-size:.78rem;font-weight:600;color:#64748b}
+  .kpi .k-val{font-size:1.65rem;font-weight:800;line-height:1.2;margin:2px 0 4px}
+  .kpi .k-track{position:relative;height:4px;border-radius:2px;background:rgba(128,128,128,.35);
+    margin:12px 6px 12px}
+  .kpi .k-mid{position:absolute;left:50%;top:-4px;width:2px;height:12px;background:rgba(128,128,128,.7)}
+  .kpi .k-dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
+    transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+  .kpi .k-word{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;
+    font-size:.78rem;font-weight:700}
+  .kpi .k-sub{font-size:.72rem;color:#64748b;margin-top:6px}
+  .kpi .t-good{background:#15803d} .kpi .t-mid{background:#d97706}
+  .kpi .t-bad{background:#dc2626} .kpi .t-neut{background:#64748b}
 </style>
 """, unsafe_allow_html=True)
 
@@ -130,6 +145,26 @@ def perf_tier(p, higher_is_better) -> str:
     return "good" if p >= 75 else ("bad" if p <= 25 else "mid")
 
 
+def perf_word(p: float, higher_is_better) -> str:
+    """Plain-language rating on the same cutoffs as perf_tier's colors."""
+    if higher_is_better is None:
+        words = ("Very Low", "Low", "Typical", "High", "Very High")
+    else:
+        words = ("Poor", "Below Average", "Average", "Above Average", "Excellent")
+    return words[0 if p < 10 else 1 if p <= 25 else 2 if p < 75 else 3 if p < 90 else 4]
+
+
+def fmt_money_short(v) -> str:
+    if v is None:
+        return "—"
+    sign, a = ("-" if v < 0 else ""), abs(v)
+    if a >= 1e6:
+        return f"{sign}${a / 1e6:.1f}M"
+    if a >= 1e3:
+        return f"{sign}${a / 1e3:.0f}K"
+    return f"{sign}${a:,.0f}"
+
+
 def perf_pill(c: dict, higher_is_better) -> str:
     p = c.get("performance_pct")
     if p is None:
@@ -168,7 +203,7 @@ under {engine.MIN_REGIONAL_N} are marked ⚠️ and should be read as directiona
 VINTAGE_HELP = """\
 **Off:** every metric is ranked against all ACOs in the selected group.
 
-**On:** every metric on this tab is ranked only against ACOs in the selected group whose \
+**On:** every metric, on every tab, is ranked only against ACOs in the selected group whose \
 benchmark year 3 (BY3) is the same as this ACO's.
 
 Expense trend and risk score ratio always use same-vintage ACOs either way, because \
@@ -179,7 +214,23 @@ BY3_NOTE = ("Expense trend and risk score ratio are always compared only against
             "the benchmark was set.")
 
 
-def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> tuple[str, bool]:
+def sticky(key: str, options: list, default=None) -> dict:
+    """Widget kwargs that re-apply its last valid choice every run."""
+    # Option labels that embed live counts otherwise come back blank or stale once the
+    # labels change, e.g. after picking a different ACO or year.
+    keep = f"_{key}"
+    if default is not None:
+        st.session_state.setdefault(keep, default)
+    if st.session_state.get(keep) in options:
+        st.session_state[key] = st.session_state[keep]
+
+    def remember():
+        if st.session_state[key] in options:
+            st.session_state[keep] = st.session_state[key]
+    return {"key": key, "on_change": remember}
+
+
+def cohort_radio(aco_id: str | None, py: int) -> tuple[str, bool]:
     """The 'Compare against' selector plus the same-vintage switch."""
     sizes = engine.cohort_sizes(aco_id, py) if aco_id else {}
 
@@ -195,12 +246,12 @@ def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> tuple[
         return f"{base}{group} · {count(n)} ACOs ({count(n_vint)} same vintage)"
 
     cohort = st.radio("Compare against", COHORT_CHOICES, format_func=label, horizontal=True,
-                      help=f"{COHORT_HELP}\n\n{tab_note}",
-                      **shared("cohort", key, COHORT_CHOICES))
+                      help=f"{COHORT_HELP}\n\n{BY3_NOTE}",
+                      **sticky("cohort", COHORT_CHOICES, default=COHORT_CHOICES[0]))
     row = engine.get_aco(aco_id, py) if aco_id else None
     vintage = f" ({row['by3_vintage']})" if row and row.get("by3_vintage") else ""
-    vintage_only = st.toggle(f"Same BY3 vintage only{vintage}", help=VINTAGE_HELP,
-                             **shared("vintage", f"{key}_vintage"))
+    vintage_only = st.toggle(f"Same BY3 vintage only{vintage}", key="vintage",
+                             help=VINTAGE_HELP)
     return cohort, vintage_only
 
 
@@ -265,21 +316,26 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
         st.caption(m["description"])
 
 
-def pct_cell(r: dict | None, unit, higher_is_better, group: str, note: str | None = None) -> str:
-    """Colored percentile cell; hovering shows the comparison group's median and middle 50%."""
-    if note or not r or r.get("performance_pct") is None:
-        return f'<td class="pct t-neut" title="{html.escape(note or "No comparison available")}">n/a</td>'
-    p = r["performance_pct"]
-    small = r["cohort_n"] < engine.MIN_REGIONAL_N
+def rank_tip(r: dict, unit, higher_is_better, group: str) -> str:
+    """Hover text: comparison group, median and middle 50%, as an escaped title attribute."""
     tip = [f'{group}{", same BY3 vintage" if r.get("same_vintage") else ""} (n={r["cohort_n"]})',
            f'Median: {fmt(r.get("cohort_p50"), unit)}',
            f'Middle 50%: {fmt(r.get("cohort_p25"), unit)} – {fmt(r.get("cohort_p75"), unit)}']
     if higher_is_better is None:
         tip.append("Two-sided: ranked, not scored good or bad")
-    if small:
+    if r["cohort_n"] < engine.MIN_REGIONAL_N:
         tip.append(f"Fewer than {engine.MIN_REGIONAL_N} ACOs: directional only")
+    return "&#10;".join(html.escape(t) for t in tip)
+
+
+def pct_cell(r: dict | None, unit, higher_is_better, group: str, note: str | None = None) -> str:
+    """Colored percentile cell; hovering shows the comparison group's median and middle 50%."""
+    if note or not r or r.get("performance_pct") is None:
+        return f'<td class="pct t-neut" title="{html.escape(note or "No comparison available")}">n/a</td>'
+    p = r["performance_pct"]
+    small = " !" if r["cohort_n"] < engine.MIN_REGIONAL_N else ""
     return (f'<td class="pct t-{perf_tier(p, higher_is_better)}" '
-            f'title="{"&#10;".join(html.escape(t) for t in tip)}">p{p:.0f}{" !" if small else ""}</td>')
+            f'title="{rank_tip(r, unit, higher_is_better, group)}">p{p:.0f}{small}</td>')
 
 
 def name_cell(label: str, tags=(), title: str = "", sub: str = "") -> str:
@@ -342,6 +398,55 @@ def benchmark_table(rep: dict, keys: list[str], focus: str, sizes: dict,
     return rank_table(base, ("" if value == base else f"{value} · ") + count, rows)
 
 
+def kpi_box(label: str, value: str, r: dict | None, unit, higher_is_better, group: str,
+            sub: str = "") -> str:
+    p = r.get("performance_pct") if r else None
+    if p is None:
+        rating, tip = '<div class="k-sub">No comparison available</div>', ""
+    else:
+        tier = perf_tier(p, higher_is_better)
+        rating = (f'<div class="k-track"><span class="k-mid"></span>'
+                  f'<span class="k-dot t-{tier}" style="left:{min(max(p, 0), 100):.0f}%"></span></div>'
+                  f'<span class="k-word t-{tier}">{perf_word(p, higher_is_better)} · p{p:.0f}</span>')
+        tip = rank_tip(r, unit, higher_is_better, group)
+    sub_html = f'<div class="k-sub">{html.escape(sub)}</div>' if sub else ""
+    return (f'<div class="kpi" title="{tip}"><div class="k-lbl">{html.escape(label)}</div>'
+            f'<div class="k-val">{value}</div>{rating}{sub_html}</div>')
+
+
+def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
+    """Savings rate, shared savings, quality, expenditure and risk ratio vs the selected group."""
+    base = COHORT_LABELS.get(pick, pick)
+
+    def group_of(value: str) -> str:
+        return value if value.lower().startswith(base.lower()) else f"{base}: {value}"
+
+    boxes = []
+    for key, label in (("savings_rate", "Savings Rate"), ("shared_savings", "Shared Savings / Losses"),
+                       ("quality_score", "Quality Score"), ("per_capita_exp", "Per-Capita Expenditure"),
+                       ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)")):
+        if key == "shared_savings":
+            if not savings:
+                continue
+            total = savings["total"]
+            group = group_of(savings["cohort"]["value"])
+            vint = ", same BY3 vintage" if savings.get("same_vintage") else ""
+            sub = ("No shared savings earned" if not total else
+                   f'{fmt(abs(savings["per_beneficiary"]), "$")} per beneficiary'
+                   f'{"" if total > 0 else " owed"} vs {group}{vint} · '
+                   f'{savings["cohort_n"]} ACOs')
+            boxes.append(kpi_box(label, fmt_money_short(total), savings, "$", True, group, sub))
+            continue
+        m = rep["metrics"][key]
+        c = m["comparisons"].get(pick)
+        group = group_of(c["cohort_value"]) if c else base
+        vint = ", same BY3 vintage" if c and c.get("same_vintage") else ""
+        sub = f'vs {group}{vint} · {c["cohort_n"]} ACOs' if c else ""
+        boxes.append(kpi_box(label, fmt(m["value"], m["unit"]), c, m["unit"],
+                             m["higher_is_better"], group, sub))
+    return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
+
+
 # ---------------------------------------------------------------- header
 st.title("ACO Benchmark")
 _meta = engine.meta()
@@ -353,83 +458,61 @@ st.caption(f"Medicare Shared Savings Program performance and quality benchmarkin
 # the running instance is serving stale data files.
 st.caption(f"Data build: {build}")
 
-tabs = st.tabs(["🔎 ACO Performance", "🩺 Quality Performance", "💵 Medical Expense Performance",
-                "📐 Benchmark My Numbers", "💬 Ask the Data", "📖 Methodology"])
-
 FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final_adj",
              "n_beneficiaries", "quality_score", "per_capita_exp", "benchmark_per_capita",
              "share_rate", "admits_per_1000", "ed_visits_per_1000", "pc_services_per_1000",
              "readmits_proxy", "snf_admits_per_1000", "snf_los", "hcc_risk_py",
              "reg_adj", "prior_sav_adj", "pct_dual", "pct_lti"]
 
-
-SHARED_DEFAULTS = {"q": "", "py": 2024, "cohort": "track", "vintage": False}
-
-
-def _remember(field: str, key: str, options: list | None):
-    # A radio on a hidden tab can report a stale option label as a change when the
-    # labels' counts update; only real options may become the shared selection.
-    value = st.session_state[key]
-    if options is None or value in options:
-        st.session_state[f"shared_{field}"] = value
-
-
-def shared(field: str, key: str, options: list | None = None) -> dict:
-    """Widget kwargs that keep this control in step with its twins on the other ACO tabs."""
-    # Re-applied every run so each tab's control always displays the value in use.
-    value = st.session_state.get(f"shared_{field}", SHARED_DEFAULTS.get(field))
-    if value is not None and (options is None or value in options):
-        st.session_state[key] = value
-    return {"key": key, "on_change": _remember, "args": (field, key, options)}
-
-
-def aco_picker(key: str):
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        q = st.text_input("ACO name", placeholder="e.g. Aledade Delaware, Privia, Hackensack",
-                          **shared("q", f"q_{key}"))
-    with c2:
-        years = [2024, 2023]
-        py = st.selectbox("Performance year", years, **shared("py", f"py_{key}", years))
-    if not q:
-        return None, py
+# ---------------------------------------------------------------- selection (every tab)
+c1, c2 = st.columns([3, 1])
+with c1:
+    q = st.text_input("ACO name", placeholder="e.g. Aledade Delaware, Privia, Hackensack", key="q")
+with c2:
+    py = st.selectbox("Performance year", [2024, 2023], key="py")
+aco_id = None
+if q:
     hits = engine.find_acos(q, performance_year=py, limit=12)
-    if not hits:
+    if hits:
+        names = {h["aco_id"]: f'{h["aco_name"]} · {h["aco_id"]} · '
+                              f'{int(h["n_beneficiaries"] or 0):,} lives' for h in hits}
+        aco_id = st.selectbox(f"{len(hits)} matches", list(names), format_func=names.get,
+                              **sticky("sel", list(names)))
+    else:
         st.warning("No ACO matches that name.")
-        return None, py
-    names = {h["aco_id"]: f'{h["aco_name"]} · {h["aco_id"]} · {int(h["n_beneficiaries"] or 0):,} lives'
-             for h in hits}
-    aco_id = st.selectbox(f"{len(hits)} matches", list(names), format_func=names.get,
-                          **shared("sel", f"sel_{key}", list(names)))
-    return aco_id, py
+focus, vintage_only = cohort_radio(aco_id, py)
 
+if aco_id:
+    rep = engine.benchmark_aco(aco_id, performance_year=py, vintage_only=vintage_only)
+    a = rep["aco"]
+    fl = flags_by_key(a.get("quality_flags"))
+    st.markdown(f"### {a['aco_name']}")
+    bits = [f"**Track:** {a['track']}", f"**Revenue:** {a['rev_cat']}",
+            f"**Size:** {a['size_band']}", f"**Risk:** {a['risk_model']}"]
+    if a["n_beneficiaries"]:
+        bits.append(f"**Beneficiaries:** {int(a['n_beneficiaries']):,}")
+    if a.get("by3_vintage"):
+        bits.append(f"**{a['by3_vintage']}** ({py - int(a['by3_year'])}-yr window)")
+    if a["service_area"]:
+        bits.append(f"**Service area:** {', '.join(a['service_area'])}")
+    if a["regional_peer_n"]:
+        bits.append(f"**Regional peers:** {a['regional_peer_n']}")
+    st.markdown(" · ".join(bits))
+    if a.get("final_adj_type"):
+        st.caption(f"CMS applied: {a['final_adj_type']}")
+    # An ACO with no regional peers falls back to all ACOs, as the tables do.
+    pick = focus if focus in rep["metrics"]["savings_rate"]["comparisons"] else "all"
+    st.markdown(headline_boxes(rep, pick, engine.shared_savings(aco_id, py, pick, vintage_only)),
+                unsafe_allow_html=True)
+else:
+    st.info("Enter an ACO name above to see its performance.")
+
+tabs = st.tabs(["🔎 ACO Performance", "🩺 Quality Performance", "💵 Medical Expense Performance",
+                "📐 Benchmark My Numbers", "💬 Ask the Data", "📖 Methodology"])
 
 # ================================================================ TAB 1
 with tabs[0]:
-    aco_id, py = aco_picker("lookup")
-    focus, vint_l = cohort_radio(
-        "lookup_cohort", aco_id, py,
-        "This sets which group the table and narrative compare against. "
-        f"{BY3_NOTE}")
     if aco_id:
-        rep = engine.benchmark_aco(aco_id, performance_year=py, vintage_only=vint_l)
-        a = rep["aco"]
-        fl = flags_by_key(a.get("quality_flags"))
-        st.markdown(f"### {a['aco_name']}")
-        bits = [f"**Track:** {a['track']}", f"**Revenue:** {a['rev_cat']}",
-                f"**Size:** {a['size_band']}", f"**Risk:** {a['risk_model']}"]
-        if a["n_beneficiaries"]:
-            bits.append(f"**Beneficiaries:** {int(a['n_beneficiaries']):,}")
-        if a.get("by3_vintage"):
-            bits.append(f"**{a['by3_vintage']}** ({py - int(a['by3_year'])}-yr window)")
-        if a["service_area"]:
-            bits.append(f"**Service area:** {', '.join(a['service_area'])}")
-        if a["regional_peer_n"]:
-            bits.append(f"**Regional peers:** {a['regional_peer_n']}")
-        st.markdown(" · ".join(bits))
-        if a.get("final_adj_type"):
-            st.caption(f"CMS applied: {a['final_adj_type']}")
-
         st.markdown("#### Financial benchmark")
         qps = fl.get("Met_QPS", {}).get("state")
         st.markdown(benchmark_table(rep, FIN_ORDER, focus, engine.cohort_sizes(aco_id, py), qps),
@@ -461,7 +544,7 @@ with tabs[0]:
                                 f"comparison cohort. Anchor the analysis there."
                                 + (" The reader also chose to compare every metric against "
                                    f"same-vintage ACOs only ({a['by3_vintage']})."
-                                   if vint_l else "")),
+                                   if vintage_only else "")),
                     payload=json.dumps(slim, default=str)[:60000],
                     user_question=(f"The reader specifically asks: {uq}" if uq else ""))
                 with st.spinner("Generating…"):
@@ -475,14 +558,9 @@ with tabs[1]:
     st.markdown("### Quality performance")
     st.caption("Every reported quality measure ranked against a peer cohort, "
                "direction-adjusted so a high percentile always means good performance.")
-    aco_id_q, py_q = aco_picker("quality")
-    cohort_choice, vint_q = cohort_radio(
-        "qcohort", aco_id_q, py_q,
-        "Every quality measure, gap, and strength on this tab is ranked against the group "
-        "you pick.")
-    if aco_id_q:
-        qp = engine.quality_profile(aco_id_q, cohort=cohort_choice, performance_year=py_q,
-                                    vintage_only=vint_q)
+    if aco_id:
+        qp = engine.quality_profile(aco_id, cohort=focus, performance_year=py,
+                                    vintage_only=vintage_only)
         if not qp:
             st.warning("No quality data for this ACO.")
         else:
@@ -561,7 +639,7 @@ with tabs[1]:
             } for mm in qp["measures"]]
             st.download_button("Download quality detail (CSV)",
                                pd.DataFrame(rows).to_csv(index=False),
-                               file_name=f"quality_{aco_id_q}_{py_q}.csv", mime="text/csv")
+                               file_name=f"quality_{aco_id}_{py}.csv", mime="text/csv")
 
             st.markdown("##### Quality coaching narrative")
             quq = st.text_input("Optional — focus the narrative on a question",
@@ -592,14 +670,9 @@ with tabs[2]:
     st.caption("Per-capita cost and utilization ranked against a peer cohort. "
                "Metrics marked two-sided are ranked but not scored good or bad — "
                "raising ambulatory contact is often how acute utilization comes down.")
-    aco_id_e, py_e = aco_picker("expense")
-    cohort_e, vint_e = cohort_radio(
-        "ecohort", aco_id_e, py_e,
-        f"Every cost and utilization metric on this tab is ranked against the group you pick. "
-        f"{BY3_NOTE}")
-    if aco_id_e:
-        ep = engine.expense_profile(aco_id_e, cohort=cohort_e, performance_year=py_e,
-                                    vintage_only=vint_e)
+    if aco_id:
+        ep = engine.expense_profile(aco_id, cohort=focus, performance_year=py,
+                                    vintage_only=vintage_only)
         if not ep:
             st.warning("No expense data for this ACO.")
         else:
@@ -669,7 +742,7 @@ with tabs[2]:
                 "Performance percentile": mm["performance_pct"], "n": mm["cohort_n"],
             } for mm in ep["cost"] + ep["utilization"]])
             st.download_button("Download expense detail (CSV)", all_rows.to_csv(index=False),
-                               file_name=f"expense_{aco_id_e}_{py_e}.csv", mime="text/csv")
+                               file_name=f"expense_{aco_id}_{py}.csv", mime="text/csv")
 
             st.markdown("##### Medical expense narrative")
             expq = st.text_input("Optional — focus the narrative on a question",

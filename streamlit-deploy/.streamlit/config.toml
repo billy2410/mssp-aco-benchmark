@@ -1,0 +1,12 @@
+# Softer than Streamlit's defaults: no pure black in dark mode, no pure white in light.
+# The app follows the viewer's system setting; either can be picked under ⋮ → Settings.
+
+[theme.light]
+backgroundColor = "#f6f5f1"
+secondaryBackgroundColor = "#ebe8e1"
+textColor = "#2a2f38"
+
+[theme.dark]
+backgroundColor = "#1e2430"
+secondaryBackgroundColor = "#28303f"
+textColor = "#dbe2ea"
