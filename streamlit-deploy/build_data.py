@@ -73,8 +73,10 @@ METRICS = [
      False, "Total Medicare per-capita expenditure for assigned beneficiaries in the PY."),
     ("quality_score", "Quality Score", "QualScore", "%", True,
      "Composite ACO quality score used to determine the final shared-savings payment."),
-    ("hcc_risk_py", "CMS-HCC Risk Score (AGND, PY)", "CMS_HCC_RiskScore_AGND_PY", "score", None,
-     "CMS-HCC risk score for aged non-dual beneficiaries in the performance year."),
+    ("hcc_risk_py", "CMS-HCC Risk Score (AGND, PY)", "CMS_HCC_RiskScore_AGND_PY", "score", True,
+     "CMS-HCC risk score for aged non-dual beneficiaries in the performance year. Higher is "
+     "ranked as better: a higher documented risk score raises the benchmark. It also "
+     "describes how sick the population is, not only performance."),
     ("admits_per_1000", "All-Cause Inpatient Admits / 1000", "ADM", "per 1k", False,
      "Risk-adjusted inpatient admissions per 1,000 person-years."),
     ("ed_visits_per_1000", "ED Visits / 1000", "P_EDV_Vis", "per 1k", False,
@@ -83,27 +85,34 @@ METRICS = [
      "Skilled nursing facility admissions per 1,000 person-years."),
     ("snf_los", "SNF Length of Stay (days)", "SNF_LOS", "days", False,
      "Average SNF length of stay."),
-    ("pc_services_per_1000", "Primary Care Services / 1000", "P_EM_Total", "per 1k", None,
-     "All evaluation & management services per 1,000 person-years. Deliberately "
-     "undirected: raising ambulatory contact is usually how an ACO drives acute "
-     "utilization down, so a high value is not on its own a negative finding."),
+    ("pc_services_per_1000", "Primary Care Services / 1000", "P_EM_Total", "per 1k", True,
+     "All evaluation & management services per 1,000 person-years. Higher is ranked as "
+     "better: more ambulatory contact is usually how an ACO drives acute utilization down."),
     ("readmits_proxy", "30-day Readmission Risk-Std (Measure 479)", "Measure_479", "%", False,
      "All-cause unplanned admissions for patients with multiple chronic conditions."),
-    ("pct_dual", "Dual-Eligible %", "Perc_Dual", "%", None,
-     "Percent of assigned beneficiaries who are dual-eligible."),
-    ("pct_lti", "Long-Term Institutionalized %", "Perc_LTI", "%", None,
-     "Percent of assigned beneficiaries who are long-term institutionalized."),
-    ("benchmark_per_capita", "Updated Benchmark / Beneficiary", "UpdatedBnchmk", "$", None,
-     "Per-capita updated benchmark used for the performance year."),
-    ("n_beneficiaries", "Assigned Beneficiaries", "N_AB", "lives", None,
-     "Total number of assigned Medicare FFS beneficiaries."),
+    ("pct_dual", "Dual-Eligible %", "Perc_Dual", "%", True,
+     "Percent of assigned beneficiaries who are dual-eligible. Higher is ranked as better: "
+     "it counts toward CMS's population and income (health equity) bonus points. It mainly "
+     "describes the population served."),
+    ("pct_lti", "Long-Term Institutionalized %", "Perc_LTI", "%", False,
+     "Percent of assigned beneficiaries who are long-term institutionalized. Lower is ranked "
+     "as better: these are among the costliest beneficiaries to manage. It mainly describes "
+     "the population served."),
+    ("benchmark_per_capita", "Updated Benchmark / Beneficiary", "UpdatedBnchmk", "$", True,
+     "Per-capita updated benchmark used for the performance year. Higher is ranked as "
+     "better: a higher benchmark leaves more room to generate savings."),
+    ("n_beneficiaries", "Assigned Beneficiaries", "N_AB", "lives", True,
+     "Total number of assigned Medicare FFS beneficiaries. Higher is ranked as better: "
+     "larger ACOs have steadier, more statistically reliable results."),
     ("share_rate", "Final Share Rate", "FinalShareRate", "%", True,
      "Percentage of generated savings the ACO is eligible to keep."),
     # ---- v2 derived KPIs (source_col is the derived column name) ----
-    ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)", "risk_ratio_by3_py", "pct_ratio", None,
+    ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)", "risk_ratio_by3_py", "pct_ratio", True,
      "Membership-weighted CMS-HCC risk score in the performance year divided by the "
      "membership-weighted risk score in benchmark year 3. Above 1.00 means documented "
-     "risk grew relative to the benchmark period."),
+     "risk grew relative to the benchmark period. Higher is ranked as better: risk growth "
+     "raises the benchmark (CMS caps how much). Read it against the expense trend; growth "
+     "far above peers can also draw coding-intensity scrutiny."),
     ("expense_trend_by3_py", "Medical Expense Trend (BY3 → PY)", "expense_trend_by3_py", "pct_ratio",
      False, "Membership-weighted per-capita expenditure in the performance year divided by "
      "the membership-weighted per-capita expenditure in benchmark year 3. Below 1.00 means "
@@ -151,21 +160,21 @@ EXPENSE_METRICS = [
      "Per-capita annualized inpatient rehabilitation facility spend."),
     ("cap_inp_psych", "Inpatient — Psych", "CapAnn_INP_Psych", "$", False, False, "cost",
      "Per-capita annualized inpatient psychiatric facility spend."),
-    ("cap_hospice", "Hospice", "CapAnn_HSP", "$", None, False, "cost",
-     "Per-capita annualized hospice spend. Two-sided: higher spend can reflect "
-     "appropriate end-of-life care that displaces aggressive inpatient utilization."),
+    ("cap_hospice", "Hospice", "CapAnn_HSP", "$", True, False, "cost",
+     "Per-capita annualized hospice spend. Higher is ranked as better: it usually reflects "
+     "appropriate end-of-life care that displaces costlier inpatient utilization."),
     ("cap_snf", "Skilled Nursing Facility", "CapAnn_SNF", "$", False, True, "cost",
      "Per-capita annualized SNF spend — a primary post-acute lever in value-based care."),
     ("cap_opd", "Hospital Outpatient", "CapAnn_OPD", "$", False, True, "cost",
      "Per-capita annualized hospital outpatient department spend."),
-    ("cap_pb", "Physician / Professional", "CapAnn_PB", "$", None, True, "cost",
-     "Per-capita annualized Part B professional services spend. Two-sided: higher "
-     "professional spend may reflect stronger ambulatory access rather than waste."),
+    ("cap_pb", "Physician / Professional", "CapAnn_PB", "$", False, True, "cost",
+     "Per-capita annualized Part B professional services spend. Lower is ranked as better, "
+     "as for other spend; read it with E&M visits, since strong primary-care access raises it."),
     ("cap_ambulance", "Ambulance", "CapAnn_AmbPay", "$", False, False, "cost",
      "Per-capita annualized ambulance spend."),
-    ("cap_hha", "Home Health", "CapAnn_HHA", "$", None, False, "cost",
-     "Per-capita annualized home health spend. Two-sided: home health frequently "
-     "substitutes for more expensive SNF days."),
+    ("cap_hha", "Home Health", "CapAnn_HHA", "$", False, False, "cost",
+     "Per-capita annualized home health spend. Lower is ranked as better, as for other "
+     "spend; read it with SNF spend, since home health often substitutes for costlier SNF days."),
     ("cap_dme", "Durable Medical Equipment", "CapAnn_DME", "$", False, True, "cost",
      "Per-capita annualized DME spend."),
     # ---- Utilization: per 1,000 person-years unless noted ----
@@ -185,18 +194,21 @@ EXPENSE_METRICS = [
      "CT imaging events per 1,000 person-years."),
     ("util_mri", "MRI Scans / 1000", "P_MRI_VIS", "per 1k", False, False, "utilization",
      "MRI imaging events per 1,000 person-years."),
-    ("util_em_total", "Primary Care Services (E&M Total) / 1000", "P_EM_Total", "per 1k", None, True, "utilization",
-     "All evaluation & management services per 1,000 person-years. Two-sided: higher "
-     "ambulatory contact is often the mechanism by which acute utilization falls."),
-    ("util_em_pcp", "E&M — Primary Care / 1000", "P_EM_PCP_Vis", "per 1k", None, True, "utilization",
-     "Primary care E&M visits per 1,000 person-years. Two-sided, as above."),
-    ("util_em_spec", "E&M — Specialist / 1000", "P_EM_SP_Vis", "per 1k", None, True, "utilization",
-     "Specialist E&M visits per 1,000 person-years. Two-sided: appropriate specialty "
-     "access and specialty overuse both raise this."),
-    ("util_nurse", "Nurse Practitioner Visits / 1000", "P_Nurse_Vis", "per 1k", None, True, "utilization",
-     "Nurse practitioner / physician assistant visits per 1,000 person-years."),
-    ("util_fqhc_rhc", "FQHC / RHC Visits / 1000", "P_FQHC_RHC_Vis", "per 1k", None, False, "utilization",
-     "Federally qualified health center and rural health clinic visits per 1,000 person-years."),
+    ("util_em_total", "Primary Care Services (E&M Total) / 1000", "P_EM_Total", "per 1k", True, True, "utilization",
+     "All evaluation & management services per 1,000 person-years. Higher is ranked as "
+     "better: more ambulatory contact is often how acute utilization falls."),
+    ("util_em_pcp", "E&M — Primary Care / 1000", "P_EM_PCP_Vis", "per 1k", True, True, "utilization",
+     "Primary care E&M visits per 1,000 person-years. Higher is ranked as better: more "
+     "primary-care contact is often how acute utilization falls."),
+    ("util_em_spec", "E&M — Specialist / 1000", "P_EM_SP_Vis", "per 1k", False, True, "utilization",
+     "Specialist E&M visits per 1,000 person-years. Lower is ranked as better: specialist "
+     "visits are a common cost driver, though some reflect needed access."),
+    ("util_nurse", "Nurse Practitioner Visits / 1000", "P_Nurse_Vis", "per 1k", True, True, "utilization",
+     "Nurse practitioner / physician assistant visits per 1,000 person-years. Higher is "
+     "ranked as better: they extend primary-care access."),
+    ("util_fqhc_rhc", "FQHC / RHC Visits / 1000", "P_FQHC_RHC_Vis", "per 1k", True, False, "utilization",
+     "Federally qualified health center and rural health clinic visits per 1,000 "
+     "person-years. Higher is ranked as better: they extend primary-care access."),
     ("util_snf_adm", "SNF Discharges / 1000", "P_SNF_ADM", "per 1k", False, True, "utilization",
      "Skilled nursing facility discharges per 1,000 person-years."),
     ("util_snf_los", "SNF Length of Stay (days)", "SNF_LOS", "days", False, True, "utilization",

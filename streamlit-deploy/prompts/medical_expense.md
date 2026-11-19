@@ -50,8 +50,8 @@ or volume**:
 Only draw the conclusion the payload supports. If the pairing is ambiguous,
 say which additional field would settle it rather than guessing.
 
-**4. Substitution check (1–2 bullets).** Look at the two-sided metrics against
-the acute ones. High ambulatory contact with low admissions is a working
+**4. Substitution check (1–2 bullets).** Look at primary-care contact (E&M,
+nurse practitioner, FQHC/RHC visits) against the acute metrics. High ambulatory contact with low admissions is a working
 substitution; high ambulatory contact with high admissions is not. State which
 pattern this ACO shows.
 
@@ -63,7 +63,8 @@ median would be worth per beneficiary.
 
 ## Rules
 
-- Never call a two-sided metric a gap or a strength. Describe it.
+- Physician / professional and home health spend can look like gaps when they
+  reflect good substitution; check the pairing before calling them a problem.
 - Dollar figures are per-capita annualized; utilization is per 1,000
   person-years unless the unit says otherwise. Do not mix the two scales.
 - When you quantify an opportunity, show the arithmetic in the sentence

@@ -37,8 +37,8 @@
       "label": "CMS-HCC Risk Score (AGND, PY)",
       "source_col": "CMS_HCC_RiskScore_AGND_PY",
       "unit": "score",
-      "higher_is_better": null,
-      "description": "CMS-HCC risk score for aged non-dual beneficiaries in the performance year.",
+      "higher_is_better": true,
+      "description": "CMS-HCC risk score for aged non-dual beneficiaries in the performance year. Higher is ranked as better: a higher documented risk score raises the benchmark. It also describes how sick the population is, not only performance.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -87,8 +87,8 @@
       "label": "Primary Care Services / 1000",
       "source_col": "P_EM_Total",
       "unit": "per 1k",
-      "higher_is_better": null,
-      "description": "All evaluation & management services per 1,000 person-years. Deliberately undirected: raising ambulatory contact is usually how an ACO drives acute utilization down, so a high value is not on its own a negative finding.",
+      "higher_is_better": true,
+      "description": "All evaluation & management services per 1,000 person-years. Higher is ranked as better: more ambulatory contact is usually how an ACO drives acute utilization down.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -107,8 +107,8 @@
       "label": "Dual-Eligible %",
       "source_col": "Perc_Dual",
       "unit": "%",
-      "higher_is_better": null,
-      "description": "Percent of assigned beneficiaries who are dual-eligible.",
+      "higher_is_better": true,
+      "description": "Percent of assigned beneficiaries who are dual-eligible. Higher is ranked as better: it counts toward CMS's population and income (health equity) bonus points. It mainly describes the population served.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -117,8 +117,8 @@
       "label": "Long-Term Institutionalized %",
       "source_col": "Perc_LTI",
       "unit": "%",
-      "higher_is_better": null,
-      "description": "Percent of assigned beneficiaries who are long-term institutionalized.",
+      "higher_is_better": false,
+      "description": "Percent of assigned beneficiaries who are long-term institutionalized. Lower is ranked as better: these are among the costliest beneficiaries to manage. It mainly describes the population served.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -127,8 +127,8 @@
       "label": "Updated Benchmark / Beneficiary",
       "source_col": "UpdatedBnchmk",
       "unit": "$",
-      "higher_is_better": null,
-      "description": "Per-capita updated benchmark used for the performance year.",
+      "higher_is_better": true,
+      "description": "Per-capita updated benchmark used for the performance year. Higher is ranked as better: a higher benchmark leaves more room to generate savings.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -137,8 +137,8 @@
       "label": "Assigned Beneficiaries",
       "source_col": "N_AB",
       "unit": "lives",
-      "higher_is_better": null,
-      "description": "Total number of assigned Medicare FFS beneficiaries.",
+      "higher_is_better": true,
+      "description": "Total number of assigned Medicare FFS beneficiaries. Higher is ranked as better: larger ACOs have steadier, more statistically reliable results.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -157,8 +157,8 @@
       "label": "Risk Score Ratio (BY3 \u2192 PY)",
       "source_col": "risk_ratio_by3_py",
       "unit": "pct_ratio",
-      "higher_is_better": null,
-      "description": "Membership-weighted CMS-HCC risk score in the performance year divided by the membership-weighted risk score in benchmark year 3. Above 1.00 means documented risk grew relative to the benchmark period.",
+      "higher_is_better": true,
+      "description": "Membership-weighted CMS-HCC risk score in the performance year divided by the membership-weighted risk score in benchmark year 3. Above 1.00 means documented risk grew relative to the benchmark period. Higher is ranked as better: risk growth raises the benchmark (CMS caps how much). Read it against the expense trend; growth far above peers can also draw coding-intensity scrutiny.",
       "family": "financial",
       "vintage_sensitive": true
     },
@@ -264,10 +264,10 @@
       "label": "Hospice",
       "source_col": "CapAnn_HSP",
       "unit": "$",
-      "higher_is_better": null,
+      "higher_is_better": true,
       "important": false,
       "family": "cost",
-      "description": "Per-capita annualized hospice spend. Two-sided: higher spend can reflect appropriate end-of-life care that displaces aggressive inpatient utilization.",
+      "description": "Per-capita annualized hospice spend. Higher is ranked as better: it usually reflects appropriate end-of-life care that displaces costlier inpatient utilization.",
       "vintage_sensitive": false
     },
     {
@@ -297,10 +297,10 @@
       "label": "Physician / Professional",
       "source_col": "CapAnn_PB",
       "unit": "$",
-      "higher_is_better": null,
+      "higher_is_better": false,
       "important": true,
       "family": "cost",
-      "description": "Per-capita annualized Part B professional services spend. Two-sided: higher professional spend may reflect stronger ambulatory access rather than waste.",
+      "description": "Per-capita annualized Part B professional services spend. Lower is ranked as better, as for other spend; read it with E&M visits, since strong primary-care access raises it.",
       "vintage_sensitive": false
     },
     {
@@ -319,10 +319,10 @@
       "label": "Home Health",
       "source_col": "CapAnn_HHA",
       "unit": "$",
-      "higher_is_better": null,
+      "higher_is_better": false,
       "important": false,
       "family": "cost",
-      "description": "Per-capita annualized home health spend. Two-sided: home health frequently substitutes for more expensive SNF days.",
+      "description": "Per-capita annualized home health spend. Lower is ranked as better, as for other spend; read it with SNF spend, since home health often substitutes for costlier SNF days.",
       "vintage_sensitive": false
     },
     {
@@ -429,10 +429,10 @@
       "label": "Primary Care Services (E&M Total) / 1000",
       "source_col": "P_EM_Total",
       "unit": "per 1k",
-      "higher_is_better": null,
+      "higher_is_better": true,
       "important": true,
       "family": "utilization",
-      "description": "All evaluation & management services per 1,000 person-years. Two-sided: higher ambulatory contact is often the mechanism by which acute utilization falls.",
+      "description": "All evaluation & management services per 1,000 person-years. Higher is ranked as better: more ambulatory contact is often how acute utilization falls.",
       "vintage_sensitive": false
     },
     {
@@ -440,10 +440,10 @@
       "label": "E&M \u2014 Primary Care / 1000",
       "source_col": "P_EM_PCP_Vis",
       "unit": "per 1k",
-      "higher_is_better": null,
+      "higher_is_better": true,
       "important": true,
       "family": "utilization",
-      "description": "Primary care E&M visits per 1,000 person-years. Two-sided, as above.",
+      "description": "Primary care E&M visits per 1,000 person-years. Higher is ranked as better: more primary-care contact is often how acute utilization falls.",
       "vintage_sensitive": false
     },
     {
@@ -451,10 +451,10 @@
       "label": "E&M \u2014 Specialist / 1000",
       "source_col": "P_EM_SP_Vis",
       "unit": "per 1k",
-      "higher_is_better": null,
+      "higher_is_better": false,
       "important": true,
       "family": "utilization",
-      "description": "Specialist E&M visits per 1,000 person-years. Two-sided: appropriate specialty access and specialty overuse both raise this.",
+      "description": "Specialist E&M visits per 1,000 person-years. Lower is ranked as better: specialist visits are a common cost driver, though some reflect needed access.",
       "vintage_sensitive": false
     },
     {
@@ -462,10 +462,10 @@
       "label": "Nurse Practitioner Visits / 1000",
       "source_col": "P_Nurse_Vis",
       "unit": "per 1k",
-      "higher_is_better": null,
+      "higher_is_better": true,
       "important": true,
       "family": "utilization",
-      "description": "Nurse practitioner / physician assistant visits per 1,000 person-years.",
+      "description": "Nurse practitioner / physician assistant visits per 1,000 person-years. Higher is ranked as better: they extend primary-care access.",
       "vintage_sensitive": false
     },
     {
@@ -473,10 +473,10 @@
       "label": "FQHC / RHC Visits / 1000",
       "source_col": "P_FQHC_RHC_Vis",
       "unit": "per 1k",
-      "higher_is_better": null,
+      "higher_is_better": true,
       "important": false,
       "family": "utilization",
-      "description": "Federally qualified health center and rural health clinic visits per 1,000 person-years.",
+      "description": "Federally qualified health center and rural health clinic visits per 1,000 person-years. Higher is ranked as better: they extend primary-care access.",
       "vintage_sensitive": false
     },
     {

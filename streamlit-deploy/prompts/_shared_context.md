@@ -83,24 +83,26 @@ vintage-matched and also carries `same_vintage: true`. Name the vintage-matched
 peer group when you cite a percentile or median, so the reader knows which
 group it came from.
 
-## Cost and utilization are two-sided more often than they look
+## Some directions are judgment calls
 
-Cost and utilization metrics carry a `two_sided: true` flag when reducing them
-is not automatically the goal. These are ranked and given a percentile, but a
-percentile on a two-sided metric is a **description, not a verdict**. Do not
-call a high value a gap or a low value a win.
+Every metric carries a `higher_is_better` direction, and `performance_pct`
+follows it. A few of those directions are judgment calls the dashboard made,
+so read them with care rather than as verdicts:
 
-The two-sided categories and why:
-
-- **Physician / professional spend, all E&M, primary-care E&M, specialist
-  E&M, nurse practitioner and FQHC/RHC visits.** Raising ambulatory contact is
-  the usual mechanism by which an ACO drives admissions and ED visits down.
-  High values here alongside low acute utilization is the pattern of a
-  well-functioning ACO, not overuse.
-- **Home health.** Frequently substitutes for more expensive SNF days. Read it
-  next to SNF spend and SNF discharges, never alone.
-- **Hospice.** Higher hospice spend often reflects appropriate end-of-life
-  care displacing aggressive inpatient utilization.
+- **Primary-care contact ranks higher-is-better:** all E&M, primary-care E&M,
+  nurse practitioner and FQHC/RHC visits. Raising ambulatory contact is the
+  usual mechanism by which an ACO drives admissions and ED visits down.
+- **Specialist E&M, physician / professional spend and home health spend rank
+  lower-is-better**, like other spend. But strong primary-care access raises
+  professional spend, and home health often substitutes for costlier SNF days.
+- **Hospice spend ranks higher-is-better:** it usually reflects appropriate
+  end-of-life care displacing aggressive inpatient use.
+- **Risk score ratio and risk score rank higher-is-better** because documented
+  risk raises the benchmark; growth far above peers can also draw
+  coding-intensity scrutiny.
+- **Dual-eligible %, long-term institutionalized %, assigned beneficiaries and
+  updated benchmark** mainly describe the population and contract, not
+  performance. Do not treat a low rank on them as something to fix.
 
 The analytically useful move is to read these **in pairs**: high primary care
 plus low admissions is a substitution story; high primary care plus high
@@ -117,9 +119,6 @@ Both ratios are in the payload when available — compare them.
 - `higher_is_better = false` marks inverse metrics (cost, admits, ED visits,
   SNF LOS, readmissions, HbA1c poor control, expense trend). A low raw value
   is good. Never report these backwards.
-- `higher_is_better = null` means the direction is genuinely ambiguous — the
-  Risk Score Ratio is the main case. Present both readings rather than
-  asserting one.
 - Ratios shown as percentages (unit `pct_ratio`) are expressed as
   value × 100. A ratio of 1.0147 is 101.47%, meaning 1.47% growth from BY3.
 - `cohort_n` under 25 means a wide benchmark; under 10 means directional only.

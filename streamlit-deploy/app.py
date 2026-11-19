@@ -152,20 +152,20 @@ def fmt(v, unit):
     return f"{v}"
 
 
-def perf_tier(p, higher_is_better) -> str:
-    """good / mid / bad by direction-adjusted percentile; neutral for two-sided or no data."""
-    if p is None or higher_is_better is None:
+# Cutoffs apply to the percentile as displayed (rounded), so "p90" always reads Excellent.
+def perf_tier(p) -> str:
+    """good (p60+) / mid (p40–59) / bad (below p40) by direction-adjusted percentile."""
+    if p is None:
         return "neut"
-    return "good" if p >= 75 else ("bad" if p <= 25 else "mid")
+    p = round(p)
+    return "good" if p >= 60 else ("bad" if p < 40 else "mid")
 
 
-def perf_word(p: float, higher_is_better) -> str:
+def perf_word(p: float) -> str:
     """Plain-language rating on the same cutoffs as perf_tier's colors."""
-    if higher_is_better is None:
-        words = ("Very Low", "Low", "Typical", "High", "Very High")
-    else:
-        words = ("Poor", "Below Average", "Average", "Above Average", "Excellent")
-    return words[0 if p < 10 else 1 if p <= 25 else 2 if p < 75 else 3 if p < 90 else 4]
+    p = round(p)
+    words = ("Poor", "Below Average", "Average", "Above Average", "Excellent")
+    return words[0 if p < 10 else 1 if p < 40 else 2 if p < 60 else 3 if p < 90 else 4]
 
 
 def fmt_money_short(v) -> str:
@@ -179,13 +179,11 @@ def fmt_money_short(v) -> str:
     return f"{sign}${a:,.0f}"
 
 
-def perf_pill(c: dict, higher_is_better) -> str:
+def perf_pill(c: dict) -> str:
     p = c.get("performance_pct")
     if p is None:
         return '<span class="pill p-neut">no data</span>'
-    if higher_is_better is None:
-        return f'<span class="pill p-neut">p{p:.0f} of cohort</span>'
-    return f'<span class="pill p-{perf_tier(p, higher_is_better)}">{c["rank_label"]} · p{p:.0f}</span>'
+    return f'<span class="pill p-{perf_tier(p)}">{perf_word(p)} · p{p:.0f}</span>'
 
 
 COHORT_LABELS = {"track": "Track", "risk_model": "Risk model", "rev_cat": "Revenue category",
@@ -305,7 +303,7 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
         small = " ⚠︎ small cohort" if c.get("small_sample") else ""
         vint = ", same BY3 vintage" if c.get("same_vintage") else ""
         st.markdown(
-            perf_pill(c, m["higher_is_better"])
+            perf_pill(c)
             + f'<span class="muted"> vs {COHORT_LABELS.get(pick, pick)}'
               f' ({c["cohort_value"]}{vint}, n={c["cohort_n"]}){small}</span>',
             unsafe_allow_html=True)
@@ -325,36 +323,33 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
         st.caption(m["description"])
 
 
-def rank_tip(r: dict, unit, higher_is_better, group: str) -> str:
+def rank_tip(r: dict, unit, group: str) -> str:
     """Hover text: comparison group, median and middle 50%, as an escaped title attribute."""
     tip = [f'{group}{", same BY3 vintage" if r.get("same_vintage") else ""} (n={r["cohort_n"]})',
            f'Median: {fmt(r.get("cohort_p50"), unit)}',
            f'Middle 50%: {fmt(r.get("cohort_p25"), unit)} – {fmt(r.get("cohort_p75"), unit)}']
-    if higher_is_better is None:
-        tip.append("Two-sided: ranked, not scored good or bad")
     if r["cohort_n"] < engine.MIN_REGIONAL_N:
         tip.append(f"Fewer than {engine.MIN_REGIONAL_N} ACOs: directional only")
     return "&#10;".join(html.escape(t) for t in tip)
 
 
-def rating(p: float, higher_is_better, small: bool = False) -> tuple[str, str]:
+def rating(p: float, small: bool = False) -> tuple[str, str]:
     """(percentile track with a dot, rating pill like 'Above Average · p82')."""
-    tier = perf_tier(p, higher_is_better)
+    tier = perf_tier(p)
     track = (f'<div class="k-track"><span class="k-mid"></span><span class="k-dot t-{tier}" '
              f'style="left:{min(max(p, 0), 100):.0f}%"></span></div>')
-    word = (f'<span class="k-word t-{tier}">{perf_word(p, higher_is_better)} · p{p:.0f}'
+    word = (f'<span class="k-word t-{tier}">{perf_word(p)} · p{p:.0f}'
             f'{" !" if small else ""}</span>')
     return track, word
 
 
-def pct_cell(r: dict | None, unit, higher_is_better, group: str, note: str | None = None) -> str:
+def pct_cell(r: dict | None, unit, group: str, note: str | None = None) -> str:
     """Percentile track and rating; hovering shows the comparison group's median and middle 50%."""
     if note or not r or r.get("performance_pct") is None:
         return (f'<td class="pct" title="{html.escape(note or "No comparison available")}">'
                 f'<span class="k-word t-neut">No data</span></td>')
-    track, word = rating(r["performance_pct"], higher_is_better,
-                         r["cohort_n"] < engine.MIN_REGIONAL_N)
-    return (f'<td class="pct" title="{rank_tip(r, unit, higher_is_better, group)}">'
+    track, word = rating(r["performance_pct"], r["cohort_n"] < engine.MIN_REGIONAL_N)
+    return (f'<td class="pct" title="{rank_tip(r, unit, group)}">'
             f'<div class="rate">{track}{word}</div></td>')
 
 
@@ -388,11 +383,10 @@ def cohort_header(c: dict) -> tuple[str, str]:
 TABLE_LEGEND = (
     '<div class="muted legend">The dot shows where this ACO sits in the group; the tick is the '
     'median. Percentiles are direction-adjusted, so higher is always better.'
-    '<span style="background:#dc2626"></span>Poor (below p10) / Below Average (p10–25)'
-    '<span style="background:#d97706"></span>Average'
-    '<span style="background:#15803d"></span>Above Average (p75–90) / Excellent (p90+)'
-    '<span style="background:#64748b"></span>Two-sided: Very Low to Very High, not good or bad.'
-    ' Hover a row for the group median and middle 50%; ! marks a group under '
+    '<span style="background:#dc2626"></span>Poor (below p10) / Below Average (p10–40)'
+    '<span style="background:#d97706"></span>Average (p40–60)'
+    '<span style="background:#15803d"></span>Above Average (p60–90) / Excellent (p90+).'
+    ' Hover a metric name for how its direction is judged, and a row for the group median and middle 50%; ! marks a group under '
     f'{engine.MIN_REGIONAL_N} ACOs.</div>')
 
 
@@ -413,19 +407,19 @@ def benchmark_table(rep: dict, keys: list[str], focus: str, sizes: dict,
         group = f'{base}: {c["cohort_value"]}' if c else base
         rows.append(table_row(name_cell(m["label"], tags, m["description"]),
                               fmt(m["value"], m["unit"]),
-                              pct_cell(c, m["unit"], m["higher_is_better"], group,
+                              pct_cell(c, m["unit"], group,
                                        m.get("unavailable"))))
     return rank_table(base, ("" if value == base else f"{value} · ") + count, rows)
 
 
-def kpi_box(label: str, value: str, r: dict | None, unit, higher_is_better, group: str,
+def kpi_box(label: str, value: str, r: dict | None, unit, group: str,
             sub: str = "") -> str:
     p = r.get("performance_pct") if r else None
     if p is None:
         rating_html, tip = '<div class="k-sub">No comparison available</div>', ""
     else:
-        rating_html = "".join(rating(p, higher_is_better, r["cohort_n"] < engine.MIN_REGIONAL_N))
-        tip = rank_tip(r, unit, higher_is_better, group)
+        rating_html = "".join(rating(p, r["cohort_n"] < engine.MIN_REGIONAL_N))
+        tip = rank_tip(r, unit, group)
     sub_html = f'<div class="k-sub">{html.escape(sub)}</div>' if sub else ""
     return (f'<div class="kpi" title="{tip}"><div class="k-lbl">{html.escape(label)}</div>'
             f'<div class="k-val">{value}</div>{rating_html}{sub_html}</div>')
@@ -443,7 +437,7 @@ def metric_box(rep: dict, key: str, label: str, pick: str) -> str:
     group = group_label(pick, c["cohort_value"]) if c else COHORT_LABELS.get(pick, pick)
     vint = ", same BY3 vintage" if c and c.get("same_vintage") else ""
     sub = f'vs {group}{vint} · {c["cohort_n"]} ACOs' if c else ""
-    return kpi_box(label, fmt(m["value"], m["unit"]), c, m["unit"], m["higher_is_better"], group, sub)
+    return kpi_box(label, fmt(m["value"], m["unit"]), c, m["unit"], group, sub)
 
 
 # (flag key, box label, plain-language note for Yes / No / N/A)
@@ -531,7 +525,7 @@ def quality_takeaway(name: str, py: int, flags: dict, score: dict, group: str,
         second = "That score is a floor rather than a measured result, and no measure results were reported."
     elif p is not None:
         second = (f"Its composite score of {fmt(score['value'], '%')} is "
-                  f"{perf_word(p, True).lower()} (p{p:.0f}) against {group}"
+                  f"{perf_word(p).lower()} (p{p:.0f}) against {group}"
                   f"{'; it is ' + where if where else ''}.")
     else:
         second = ""
@@ -601,7 +595,7 @@ def measure_table(items: list[dict], title: str, subtitle: str, group: str,
                     + (f'<td class="txt">{m["collection"]}</td>' if with_collection else '')
                     + f'<td class="val">{fmt(m["value"], "measure")}</td>'
                     + f'<td class="val">{fmt(m["aco_mean"], "measure")}</td>'
-                    + pct_cell(m, "measure", m["higher_is_better"], group) + '</tr>')
+                    + pct_cell(m, "measure", group) + '</tr>')
     return (f'<table class="bm cms"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
             .replace("$", "&#36;"))
 
@@ -624,7 +618,7 @@ def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
                    f'{fmt(abs(savings["per_beneficiary"]), "$")} per beneficiary'
                    f'{"" if total > 0 else " owed"} vs {group}{vint} · '
                    f'{savings["cohort_n"]} ACOs')
-            boxes.append(kpi_box(label, fmt_money_short(total), savings, "$", True, group, sub))
+            boxes.append(kpi_box(label, fmt_money_short(total), savings, "$", group, sub))
             continue
         boxes.append(metric_box(rep, key, label, pick))
     return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
@@ -771,7 +765,7 @@ with tabs[1]:
                               ["lower is better"] if mm["higher_is_better"] is False else [],
                               mm["description"]),
                     fmt(mm["value"], "measure"),
-                    pct_cell(mm, "measure", mm["higher_is_better"], group)) for mm in items]
+                    pct_cell(mm, "measure", group)) for mm in items]
 
             g1, g2 = st.columns(2)
             with g1:
@@ -787,7 +781,7 @@ with tabs[1]:
             st.markdown(rank_table(title, subtitle, [table_row(
                 name_cell(d["domain"]), str(d["n_measures"]),
                 f'<td class="pct" title="Average percentile of {d["n_measures"]} measures">'
-                f'<div class="rate">{"".join(rating(d["avg_performance_pct"], True))}</div></td>')
+                f'<div class="rate">{"".join(rating(d["avg_performance_pct"]))}</div></td>')
                 for d in qp["domain_summary"]],
                 "Domain", "Measures"), unsafe_allow_html=True)
 
@@ -859,9 +853,9 @@ with tabs[1]:
 # ================================================================ TAB 3
 with tabs[2]:
     st.markdown("### Medical expense performance")
-    st.caption("Per-capita cost and utilization ranked against a peer cohort. "
-               "Metrics marked two-sided are ranked but not scored good or bad — "
-               "raising ambulatory contact is often how acute utilization comes down.")
+    st.caption("Per-capita cost and utilization ranked against a peer cohort. Spend and acute "
+               "use rank lower-is-better; primary-care contact ranks higher-is-better, since "
+               "raising it is often how acute utilization comes down.")
     if aco_id:
         ep = engine.expense_profile(aco_id, cohort=focus, performance_year=py,
                                     vintage_only=vintage_only)
@@ -882,7 +876,7 @@ with tabs[2]:
             st.markdown(rank_table(title, f'{c["value"]} · {a["by3_vintage"]} · {by3_n} ACOs',
                                    [table_row(
                 name_cell(m["label"], ["BY3"]), fmt(m["value"], m["unit"]),
-                pct_cell(m, m["unit"], m["higher_is_better"], f'{title}: {c["value"]}'))
+                pct_cell(m, m["unit"], f'{title}: {c["value"]}'))
                 for m in ep["by3_metrics"]]), unsafe_allow_html=True)
 
             # Cost trend read in isolation is misleading: an ACO whose documented
@@ -906,18 +900,16 @@ with tabs[2]:
             def expense_rows(items: list[dict]) -> list[str]:
                 return [table_row(name_cell(mm["label"], title=mm["description"]),
                                   fmt(mm["value"], mm["unit"]),
-                                  pct_cell(mm, mm["unit"], mm["higher_is_better"], group))
+                                  pct_cell(mm, mm["unit"], group))
                         for mm in items]
 
             g1, g2 = st.columns(2)
             with g1:
                 st.markdown("##### Biggest gaps")
-                st.caption("Directional metrics only.")
                 st.markdown(rank_table(title, subtitle, expense_rows(ep["biggest_gaps"]),
                                        compact=True), unsafe_allow_html=True)
             with g2:
                 st.markdown("##### Strongest areas")
-                st.caption("Directional metrics only.")
                 st.markdown(rank_table(title, subtitle, expense_rows(ep["top_strengths"]),
                                        compact=True), unsafe_allow_html=True)
 

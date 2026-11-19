@@ -536,16 +536,8 @@ def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 
 
 def expense_profile(aco_id: str, cohort: str = "track", performance_year: int = 2024,
                     vintage_only: bool = False) -> dict | None:
-    """Cost and utilization metrics ranked against one cohort.
-
-    Deliberately mirrors quality_profile's cohort resolution so that the
-    "Compare Against" control behaves identically on every tab.
-
-    Metrics whose higher_is_better is None are two-sided: they are ranked and
-    their percentile is reported, but they are kept out of strengths/gaps,
-    because calling a high primary-care visit rate a "gap" would invert the
-    actual value-based reading.
-    """
+    """Cost and utilization metrics ranked against one cohort, resolved the same way as
+    quality_profile so "Compare against" behaves identically on every tab."""
     row = get_aco(aco_id, performance_year)
     if not row:
         return None
@@ -571,12 +563,10 @@ def expense_profile(aco_id: str, cohort: str = "track", performance_year: int = 
         value = _num(row.get(src, row.get(key)))
         pvals = [_num(p.get(src, p.get(key))) for p in peers]
         r = _rank_exact(value, pvals, mdef["higher_is_better"])
-        rec = {**mdef, "value": value, **r,
-               "two_sided": mdef["higher_is_better"] is None}
+        rec = {**mdef, "value": value, **r}
         (cost if mdef["family"] == "cost" else utilization).append(rec)
 
-    directional = [m for m in cost + utilization
-                   if m["performance_pct"] is not None and not m["two_sided"]]
+    directional = [m for m in cost + utilization if m["performance_pct"] is not None]
     directional.sort(key=lambda m: m["performance_pct"])
 
     def _order(items):
