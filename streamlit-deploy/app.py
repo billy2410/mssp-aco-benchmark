@@ -57,30 +57,32 @@ st.markdown("""
   table.bm th{font-size:.78rem;font-weight:600;color:#64748b;text-align:right;vertical-align:bottom}
   table.bm th:first-child,table.bm td:first-child{text-align:left}
   table.bm td.val{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-  table.bm td.pct{text-align:center;width:160px;color:#fff;font-weight:700;border-radius:4px;cursor:help}
-  @media (max-width:640px){table.bm td.pct{width:64px} table.bm th,table.bm td{padding:6px 6px}}
-  table.bm td.t-good{background:#15803d} table.bm td.t-mid{background:#d97706}
-  table.bm td.t-bad{background:#dc2626} table.bm td.t-neut{background:#64748b}
+  table.bm td.pct{width:270px;cursor:help}
+  table.bm.compact td.pct{width:210px}
   table.bm .tag{font-size:.68rem;font-weight:600;border:1px solid #94a3b8;border-radius:4px;
     padding:0 4px;margin-left:6px;color:#64748b}
   table.bm .sub{font-size:.74rem;color:#64748b}
-  table.bm.compact td.pct{width:84px}
-  .legend span{display:inline-block;width:11px;height:11px;border-radius:2px;margin:0 4px -1px 10px}
+  .legend span{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 4px -1px 10px}
   .kpis{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
   .kpi{flex:1 1 180px;border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:12px 14px;
     background:rgba(128,128,128,.05);cursor:help}
   .kpi .k-lbl{font-size:.78rem;font-weight:600;color:#64748b}
   .kpi .k-val{font-size:1.65rem;font-weight:800;line-height:1.2;margin:2px 0 4px}
-  .kpi .k-track{position:relative;height:4px;border-radius:2px;background:rgba(128,128,128,.35);
-    margin:12px 6px 12px}
-  .kpi .k-mid{position:absolute;left:50%;top:-4px;width:2px;height:12px;background:rgba(128,128,128,.7)}
-  .kpi .k-dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
-    transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
-  .kpi .k-word{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;
-    font-size:.78rem;font-weight:700}
+  .kpi .k-track{margin:12px 6px}
   .kpi .k-sub{font-size:.72rem;color:#64748b;margin-top:6px}
-  .kpi .t-good{background:#15803d} .kpi .t-mid{background:#d97706}
-  .kpi .t-bad{background:#dc2626} .kpi .t-neut{background:#64748b}
+  .k-track{position:relative;height:4px;border-radius:2px;background:rgba(128,128,128,.35)}
+  .k-mid{position:absolute;left:50%;top:-4px;width:2px;height:12px;background:rgba(128,128,128,.7)}
+  .k-dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
+    transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+  .k-word{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;
+    font-size:.78rem;font-weight:700;white-space:nowrap}
+  .rate{display:flex;align-items:center;gap:12px}
+  .rate .k-track{flex:0 0 120px;margin:0 7px}
+  table.bm.compact .rate .k-track{flex-basis:80px}
+  .k-dot.t-good,.k-word.t-good{background:#15803d} .k-dot.t-mid,.k-word.t-mid{background:#d97706}
+  .k-dot.t-bad,.k-word.t-bad{background:#dc2626} .k-dot.t-neut,.k-word.t-neut{background:#64748b}
+  @media (max-width:640px){table.bm td.pct,table.bm.compact td.pct{width:auto}
+    .rate .k-track{display:none} table.bm th,table.bm td{padding:6px 6px}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -328,14 +330,25 @@ def rank_tip(r: dict, unit, higher_is_better, group: str) -> str:
     return "&#10;".join(html.escape(t) for t in tip)
 
 
+def rating(p: float, higher_is_better, small: bool = False) -> tuple[str, str]:
+    """(percentile track with a dot, rating pill like 'Above Average · p82')."""
+    tier = perf_tier(p, higher_is_better)
+    track = (f'<div class="k-track"><span class="k-mid"></span><span class="k-dot t-{tier}" '
+             f'style="left:{min(max(p, 0), 100):.0f}%"></span></div>')
+    word = (f'<span class="k-word t-{tier}">{perf_word(p, higher_is_better)} · p{p:.0f}'
+            f'{" !" if small else ""}</span>')
+    return track, word
+
+
 def pct_cell(r: dict | None, unit, higher_is_better, group: str, note: str | None = None) -> str:
-    """Colored percentile cell; hovering shows the comparison group's median and middle 50%."""
+    """Percentile track and rating; hovering shows the comparison group's median and middle 50%."""
     if note or not r or r.get("performance_pct") is None:
-        return f'<td class="pct t-neut" title="{html.escape(note or "No comparison available")}">n/a</td>'
-    p = r["performance_pct"]
-    small = " !" if r["cohort_n"] < engine.MIN_REGIONAL_N else ""
-    return (f'<td class="pct t-{perf_tier(p, higher_is_better)}" '
-            f'title="{rank_tip(r, unit, higher_is_better, group)}">p{p:.0f}{small}</td>')
+        return (f'<td class="pct" title="{html.escape(note or "No comparison available")}">'
+                f'<span class="k-word t-neut">No data</span></td>')
+    track, word = rating(r["performance_pct"], higher_is_better,
+                         r["cohort_n"] < engine.MIN_REGIONAL_N)
+    return (f'<td class="pct" title="{rank_tip(r, unit, higher_is_better, group)}">'
+            f'<div class="rate">{track}{word}</div></td>')
 
 
 def name_cell(label: str, tags=(), title: str = "", sub: str = "") -> str:
@@ -367,12 +380,13 @@ def cohort_header(c: dict) -> tuple[str, str]:
 
 
 TABLE_LEGEND = (
-    '<div class="muted legend">Percentiles are direction-adjusted, so higher is always '
-    'better.<span style="background:#15803d"></span>Good (p75+)'
+    '<div class="muted legend">The dot shows where this ACO sits in the group; the tick is the '
+    'median. Percentiles are direction-adjusted, so higher is always better.'
+    '<span style="background:#dc2626"></span>Poor (below p10) / Below Average (p10–25)'
     '<span style="background:#d97706"></span>Average'
-    '<span style="background:#dc2626"></span>Bad (p25 or below)'
-    '<span style="background:#64748b"></span>Two-sided or no data.'
-    ' Hover a cell for the group median and middle 50%; ! marks a group under '
+    '<span style="background:#15803d"></span>Above Average (p75–90) / Excellent (p90+)'
+    '<span style="background:#64748b"></span>Two-sided: Very Low to Very High, not good or bad.'
+    ' Hover a row for the group median and middle 50%; ! marks a group under '
     f'{engine.MIN_REGIONAL_N} ACOs.</div>')
 
 
@@ -402,16 +416,13 @@ def kpi_box(label: str, value: str, r: dict | None, unit, higher_is_better, grou
             sub: str = "") -> str:
     p = r.get("performance_pct") if r else None
     if p is None:
-        rating, tip = '<div class="k-sub">No comparison available</div>', ""
+        rating_html, tip = '<div class="k-sub">No comparison available</div>', ""
     else:
-        tier = perf_tier(p, higher_is_better)
-        rating = (f'<div class="k-track"><span class="k-mid"></span>'
-                  f'<span class="k-dot t-{tier}" style="left:{min(max(p, 0), 100):.0f}%"></span></div>'
-                  f'<span class="k-word t-{tier}">{perf_word(p, higher_is_better)} · p{p:.0f}</span>')
+        rating_html = "".join(rating(p, higher_is_better, r["cohort_n"] < engine.MIN_REGIONAL_N))
         tip = rank_tip(r, unit, higher_is_better, group)
     sub_html = f'<div class="k-sub">{html.escape(sub)}</div>' if sub else ""
     return (f'<div class="kpi" title="{tip}"><div class="k-lbl">{html.escape(label)}</div>'
-            f'<div class="k-val">{value}</div>{rating}{sub_html}</div>')
+            f'<div class="k-val">{value}</div>{rating_html}{sub_html}</div>')
 
 
 def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
@@ -617,9 +628,9 @@ with tabs[1]:
             st.markdown("##### Performance by domain")
             st.markdown(rank_table(title, subtitle, [table_row(
                 name_cell(d["domain"]), str(d["n_measures"]),
-                f'<td class="pct t-{perf_tier(d["avg_performance_pct"], True)}" '
-                f'title="Average percentile of {d["n_measures"]} measures">'
-                f'p{d["avg_performance_pct"]:.0f}</td>') for d in qp["domain_summary"]],
+                f'<td class="pct" title="Average percentile of {d["n_measures"]} measures">'
+                f'<div class="rate">{"".join(rating(d["avg_performance_pct"], True))}</div></td>')
+                for d in qp["domain_summary"]],
                 "Domain", "Measures"), unsafe_allow_html=True)
 
             st.markdown("##### All measures")
