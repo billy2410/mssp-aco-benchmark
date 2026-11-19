@@ -64,10 +64,10 @@ st.markdown("""
   table.bm .sub{font-size:.74rem;color:#64748b}
   .legend span{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 4px -1px 10px}
   .kpis{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
-  .kpi{flex:1 1 180px;border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:12px 14px;
+  .kpi{flex:1 1 135px;min-width:0;border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:12px 14px;
     background:rgba(128,128,128,.05);cursor:help}
-  .kpi .k-lbl{font-size:.78rem;font-weight:600;color:#64748b}
-  .kpi .k-val{font-size:1.65rem;font-weight:800;line-height:1.2;margin:2px 0 4px}
+  .kpi .k-lbl{font-size:.78rem;font-weight:600;color:#64748b;line-height:1.35;min-height:2.7em}
+  .kpi .k-val{font-size:1.45rem;font-weight:800;line-height:1.2;margin:2px 0 4px}
   .kpi .k-track{margin:12px 6px}
   .kpi .k-sub{font-size:.72rem;color:#64748b;margin-top:6px}
   .k-track{position:relative;height:4px;border-radius:2px;background:rgba(128,128,128,.35)}
@@ -426,7 +426,7 @@ def kpi_box(label: str, value: str, r: dict | None, unit, higher_is_better, grou
 
 
 def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
-    """Savings rate, shared savings, quality, expenditure and risk ratio vs the selected group."""
+    """The six headline KPIs vs the selected group; BY3 → PY ratios use same-vintage peers."""
     base = COHORT_LABELS.get(pick, pick)
 
     def group_of(value: str) -> str:
@@ -434,8 +434,10 @@ def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
 
     boxes = []
     for key, label in (("savings_rate", "Savings Rate"), ("shared_savings", "Shared Savings / Losses"),
-                       ("quality_score", "Quality Score"), ("per_capita_exp", "Per-Capita Expenditure"),
-                       ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)")):
+                       ("quality_score", "Quality Score"),
+                       ("expense_trend_by3_py", "Medical Expense Trend (BY3 → PY)"),
+                       ("risk_ratio_by3_py", "Risk Score Ratio (BY3 → PY)"),
+                       ("reg_adj", "Regional Adjustment / Beneficiary")):
         if key == "shared_savings":
             if not savings:
                 continue
@@ -477,20 +479,14 @@ FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final
 
 # ---------------------------------------------------------------- selection (every tab)
 c1, c2 = st.columns([3, 1])
-with c1:
-    q = st.text_input("ACO name", placeholder="e.g. Aledade Delaware, Privia, Hackensack", key="q")
 with c2:
     py = st.selectbox("Performance year", [2024, 2023], key="py")
-aco_id = None
-if q:
-    hits = engine.find_acos(q, performance_year=py, limit=12)
-    if hits:
-        names = {h["aco_id"]: f'{h["aco_name"]} · {h["aco_id"]} · '
-                              f'{int(h["n_beneficiaries"] or 0):,} lives' for h in hits}
-        aco_id = st.selectbox(f"{len(hits)} matches", list(names), format_func=names.get,
-                              **sticky("sel", list(names)))
-    else:
-        st.warning("No ACO matches that name.")
+with c1:
+    names = {a["aco_id"]: f'{a["aco_name"]} · {a["aco_id"]} · {int(a["n_beneficiaries"] or 0):,} lives'
+             for a in engine.list_acos(py)}
+    aco_id = st.selectbox("ACO", list(names), format_func=names.get, index=None,
+                          placeholder="Start typing an ACO name or ID…",
+                          **sticky("sel", list(names)))
 focus, vintage_only = cohort_radio(aco_id, py)
 
 if aco_id:
@@ -503,7 +499,9 @@ if aco_id:
     if a["n_beneficiaries"]:
         bits.append(f"**Beneficiaries:** {int(a['n_beneficiaries']):,}")
     if a.get("by3_vintage"):
-        bits.append(f"**{a['by3_vintage']}** ({py - int(a['by3_year'])}-yr window)")
+        gap = py - int(a["by3_year"])
+        bits.append(f"**BY3:** {int(a['by3_year'])} ({gap} year{'s' if gap != 1 else ''} "
+                    f"before PY{py})")
     if a["service_area"]:
         bits.append(f"**Service area:** {', '.join(a['service_area'])}")
     if a["regional_peer_n"]:
@@ -516,7 +514,7 @@ if aco_id:
     st.markdown(headline_boxes(rep, pick, engine.shared_savings(aco_id, py, pick, vintage_only)),
                 unsafe_allow_html=True)
 else:
-    st.info("Enter an ACO name above to see its performance.")
+    st.info("Pick an ACO above to see its performance.")
 
 tabs = st.tabs(["🔎 ACO Performance", "🩺 Quality Performance", "💵 Medical Expense Performance",
                 "📐 Benchmark My Numbers", "💬 Ask the Data", "📖 Methodology"])

@@ -235,6 +235,14 @@ def find_acos(name_query: str, performance_year: int = 2024, limit: int = 10) ->
     return [m.__dict__ for m in matches[:limit]]
 
 
+def list_acos(performance_year: int = 2024) -> list[dict]:
+    """Every ACO in the performance year, sorted by name, for a type-to-search picker."""
+    rows = aco_index().get(f"PY{performance_year}", [])
+    return sorted(({"aco_id": r["ACO_ID"], "aco_name": r["ACO_Name"],
+                    "n_beneficiaries": _num(r.get("N_AB"))} for r in rows if r.get("ACO_Name")),
+                  key=lambda a: a["aco_name"].lower())
+
+
 def get_aco(aco_id: str, performance_year: int = 2024) -> dict | None:
     for r in aco_index().get(f"PY{performance_year}", []):
         if r.get("ACO_ID") == aco_id:
