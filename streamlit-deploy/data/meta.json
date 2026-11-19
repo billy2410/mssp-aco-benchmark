@@ -98,7 +98,7 @@
       "source_col": "Measure_479",
       "unit": "%",
       "higher_is_better": false,
-      "description": "All-cause unplanned admissions for patients with multiple chronic conditions.",
+      "description": "Hospital-wide, 30-day, all-cause unplanned readmission rate (Measure 479), risk-standardized. Lower is better.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -107,8 +107,8 @@
       "label": "Dual-Eligible %",
       "source_col": "Perc_Dual",
       "unit": "%",
-      "higher_is_better": true,
-      "description": "Percent of assigned beneficiaries who are dual-eligible. Higher is ranked as better: it counts toward CMS's population and income (health equity) bonus points. It mainly describes the population served.",
+      "higher_is_better": false,
+      "description": "Percent of assigned beneficiaries who are dual-eligible. Lower is ranked as better: dual-eligible beneficiaries tend to be costlier and harder to manage. It mainly describes the population served.",
       "family": "financial",
       "vintage_sensitive": false
     },
@@ -264,10 +264,10 @@
       "label": "Hospice",
       "source_col": "CapAnn_HSP",
       "unit": "$",
-      "higher_is_better": true,
+      "higher_is_better": false,
       "important": false,
       "family": "cost",
-      "description": "Per-capita annualized hospice spend. Higher is ranked as better: it usually reflects appropriate end-of-life care that displaces costlier inpatient utilization.",
+      "description": "Per-capita annualized hospice spend. Lower is ranked as better, as for other spend; read it with inpatient spend, since hospice can displace costlier end-of-life care.",
       "vintage_sensitive": false
     },
     {

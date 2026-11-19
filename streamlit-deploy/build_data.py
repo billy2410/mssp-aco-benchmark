@@ -89,10 +89,11 @@ METRICS = [
      "All evaluation & management services per 1,000 person-years. Higher is ranked as "
      "better: more ambulatory contact is usually how an ACO drives acute utilization down."),
     ("readmits_proxy", "30-day Readmission Risk-Std (Measure 479)", "Measure_479", "%", False,
-     "All-cause unplanned admissions for patients with multiple chronic conditions."),
-    ("pct_dual", "Dual-Eligible %", "Perc_Dual", "%", True,
-     "Percent of assigned beneficiaries who are dual-eligible. Higher is ranked as better: "
-     "it counts toward CMS's population and income (health equity) bonus points. It mainly "
+     "Hospital-wide, 30-day, all-cause unplanned readmission rate (Measure 479), "
+     "risk-standardized. Lower is better."),
+    ("pct_dual", "Dual-Eligible %", "Perc_Dual", "%", False,
+     "Percent of assigned beneficiaries who are dual-eligible. Lower is ranked as better: "
+     "dual-eligible beneficiaries tend to be costlier and harder to manage. It mainly "
      "describes the population served."),
     ("pct_lti", "Long-Term Institutionalized %", "Perc_LTI", "%", False,
      "Percent of assigned beneficiaries who are long-term institutionalized. Lower is ranked "
@@ -160,9 +161,9 @@ EXPENSE_METRICS = [
      "Per-capita annualized inpatient rehabilitation facility spend."),
     ("cap_inp_psych", "Inpatient — Psych", "CapAnn_INP_Psych", "$", False, False, "cost",
      "Per-capita annualized inpatient psychiatric facility spend."),
-    ("cap_hospice", "Hospice", "CapAnn_HSP", "$", True, False, "cost",
-     "Per-capita annualized hospice spend. Higher is ranked as better: it usually reflects "
-     "appropriate end-of-life care that displaces costlier inpatient utilization."),
+    ("cap_hospice", "Hospice", "CapAnn_HSP", "$", False, False, "cost",
+     "Per-capita annualized hospice spend. Lower is ranked as better, as for other spend; "
+     "read it with inpatient spend, since hospice can displace costlier end-of-life care."),
     ("cap_snf", "Skilled Nursing Facility", "CapAnn_SNF", "$", False, True, "cost",
      "Per-capita annualized SNF spend — a primary post-acute lever in value-based care."),
     ("cap_opd", "Hospital Outpatient", "CapAnn_OPD", "$", False, True, "cost",

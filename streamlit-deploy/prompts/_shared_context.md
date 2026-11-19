@@ -92,17 +92,17 @@ so read them with care rather than as verdicts:
 - **Primary-care contact ranks higher-is-better:** all E&M, primary-care E&M,
   nurse practitioner and FQHC/RHC visits. Raising ambulatory contact is the
   usual mechanism by which an ACO drives admissions and ED visits down.
-- **Specialist E&M, physician / professional spend and home health spend rank
-  lower-is-better**, like other spend. But strong primary-care access raises
-  professional spend, and home health often substitutes for costlier SNF days.
-- **Hospice spend ranks higher-is-better:** it usually reflects appropriate
-  end-of-life care displacing aggressive inpatient use.
+- **Specialist E&M, physician / professional, home health and hospice spend
+  rank lower-is-better**, like other spend. But strong primary-care access
+  raises professional spend, home health often substitutes for costlier SNF
+  days, and hospice can displace aggressive inpatient end-of-life care.
 - **Risk score ratio and risk score rank higher-is-better** because documented
   risk raises the benchmark; growth far above peers can also draw
   coding-intensity scrutiny.
-- **Dual-eligible %, long-term institutionalized %, assigned beneficiaries and
-  updated benchmark** mainly describe the population and contract, not
-  performance. Do not treat a low rank on them as something to fix.
+- **Dual-eligible % and long-term institutionalized % rank lower-is-better**,
+  and assigned beneficiaries and updated benchmark higher-is-better, but all
+  four mainly describe the population and contract, not performance. Do not
+  treat a low rank on them as something to fix.
 
 The analytically useful move is to read these **in pairs**: high primary care
 plus low admissions is a substitution story; high primary care plus high
