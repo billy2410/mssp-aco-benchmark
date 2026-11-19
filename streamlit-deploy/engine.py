@@ -426,6 +426,52 @@ def shared_savings(aco_id: str, performance_year: int = 2024, cohort: str = "tra
             **_rank_exact(mine, [per_beneficiary(p) for p in peers], True)}
 
 
+# Outcome measures in the APP measure set; the alternative quality standard is judged on these.
+OUTCOME_MEASURES = {"q_diabetes_hba1c_poor", "q_bp_control", "q_readmission", "q_admissions_mcc"}
+# Measures that can come from either the Web Interface or eCQM/MIPS CQM/Medicare CQM reporting.
+DUAL_REPORTED = {"q_diabetes_hba1c_poor", "q_bp_control", "q_depression_screen"}
+
+
+def measure_id(key: str) -> str:
+    """CMS measure number from the PUF field name: 'QualityID_001_WI' -> '001', 'CAHPS_1' -> 'CAHPS-1'."""
+    field = QUALITY_DEFS[key]["variants"][0]
+    if field.startswith("CAHPS_"):
+        return field.replace("_", "-")
+    return field.split("_")[1]
+
+
+def collection_type(key: str, row: dict) -> str:
+    field = QUALITY_DEFS[key]["variants"][0]
+    if field.startswith("CAHPS_"):
+        return "CAHPS for MIPS"
+    if field.startswith("Measure_"):
+        return "Administrative claims"
+    if key not in DUAL_REPORTED:
+        return "Web Interface"
+    wi, ecqm = _num(row.get("Report_WI")) == 1, _num(row.get("Report_eCQM_CQM_MedicareCQM")) == 1
+    if wi and not ecqm:
+        return "Web Interface"
+    if ecqm and not wi:
+        return "eCQM / MIPS CQM / Medicare CQM"
+    return "Web Interface or eCQM / CQM"
+
+
+_MEASURE_MEANS: dict[int, dict[str, float]] = {}
+
+
+def measure_means(performance_year: int) -> dict[str, float]:
+    """Mean rate of every reporting ACO, per measure: CMS's 'current year mean (SSP ACOs)'."""
+    if performance_year not in _MEASURE_MEANS:
+        rows = aco_index().get(f"PY{performance_year}", [])
+        means = {}
+        for key in QUALITY_DEFS:
+            vals = [v for v in (_num(r.get(key)) for r in rows) if v is not None]
+            if vals:
+                means[key] = sum(vals) / len(vals)
+        _MEASURE_MEANS[performance_year] = means
+    return _MEASURE_MEANS[performance_year]
+
+
 def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 2024,
                     vintage_only: bool = False) -> dict | None:
     """Every quality measure ranked against one cohort, split into
@@ -439,6 +485,7 @@ def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 
     if vintage_only:
         peers = _same_vintage(peers, row)
 
+    means = measure_means(performance_year)
     measures = []
     for key, qdef in QUALITY_DEFS.items():
         value = _num(row.get(key))
@@ -449,7 +496,9 @@ def quality_profile(aco_id: str, cohort: str = "track", performance_year: int = 
         measures.append({
             "key": key, "label": qdef["label"], "domain": qdef["domain"],
             "higher_is_better": qdef["higher_is_better"],
-            "description": qdef["description"], **r,
+            "description": qdef["description"], "measure_id": measure_id(key),
+            "collection": collection_type(key, row), "outcome": key in OUTCOME_MEASURES,
+            "aco_mean": means.get(key), **r,
         })
 
     measures.sort(key=lambda m: m["performance_pct"])

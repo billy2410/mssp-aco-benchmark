@@ -61,7 +61,14 @@ st.markdown("""
   table.bm.compact td.pct{width:210px}
   table.bm .tag{font-size:.68rem;font-weight:600;border:1px solid #94a3b8;border-radius:4px;
     padding:0 4px;margin-left:6px;color:#64748b}
-  table.bm .sub{font-size:.74rem;color:#64748b}
+  table.bm th.txt,table.bm td.txt{text-align:left}
+  table.bm td.ind{padding-left:34px}
+  table.bm.det{max-width:720px} table.bm.det td.val{width:150px}
+  table.bm.cms{max-width:1100px} table.bm.cms td.txt{white-space:nowrap;color:#64748b;font-size:.82rem}
+  .takeaway{border-left:4px solid #64748b;background:rgba(128,128,128,.08);border-radius:6px;
+    padding:10px 14px;margin:2px 0 16px;line-height:1.5}
+  .takeaway.t-good{border-color:#16a34a} .takeaway.t-mid{border-color:#d97706}
+  .takeaway.t-bad{border-color:#dc2626}
   .legend span{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 4px -1px 10px}
   .kpis{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
   .kpi{flex:1 1 135px;min-width:0;border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:12px 14px;
@@ -351,10 +358,9 @@ def pct_cell(r: dict | None, unit, higher_is_better, group: str, note: str | Non
             f'<div class="rate">{track}{word}</div></td>')
 
 
-def name_cell(label: str, tags=(), title: str = "", sub: str = "") -> str:
+def name_cell(label: str, tags=(), title: str = "") -> str:
     tag_html = "".join(f'<span class="tag">{html.escape(t)}</span>' for t in tags)
-    sub_html = f'<div class="sub">{html.escape(sub)}</div>' if sub else ""
-    return f'<td title="{html.escape(title)}">{html.escape(label)}{tag_html}{sub_html}</td>'
+    return f'<td title="{html.escape(title)}">{html.escape(label)}{tag_html}</td>'
 
 
 def rank_table(title: str, subtitle: str, rows: list[str], first_col: str = "Metric",
@@ -476,6 +482,128 @@ def quality_boxes(rep: dict, pick: str, flags: dict) -> str:
             notes = {**notes, "No": "Not reported, but excused under CMS's disaster (EUC) policy"}
         boxes.append(flag_box(label, flags.get(key), notes))
     return f'<div class="kpis">{"".join(boxes)}</div>'.replace("$", "&#36;")
+
+
+def quality_takeaway(name: str, py: int, flags: dict, score: dict, group: str,
+                     domains: list[dict]) -> str:
+    """Two-sentence verdict on the quality gates and where the ACO ranks, from the CMS flags."""
+    name = html.escape(name)
+    state = {k: f.get("state") for k, f in flags.items()}
+    euc = state.get("Recvd40p") == "Yes"
+    if state.get("Met_QPS") == "Yes":
+        tone = "good"
+        if euc:
+            how = " with its score set at the 40th-percentile floor under CMS's disaster (EUC) policy"
+        elif state.get("Met_40pctl") == "Yes":
+            how = " by scoring at or above the 40th-percentile MIPS quality threshold"
+        elif state.get("Met_Incentive") == "Yes":
+            how = (" through the eCQM / MIPS CQM reporting incentive, despite scoring below the "
+                   "40th-percentile threshold")
+        elif state.get("Met_FirstYear") == "Yes":
+            how = " under the first-year ACO policy, despite scoring below the 40th-percentile threshold"
+        else:
+            how = ""
+        first = (f"<b>{name} met CMS's quality performance standard for PY{py}</b>{how}, so it can "
+                 f"share savings at its track's full rate.")
+    elif state.get("Met_AltQPS") == "Yes":
+        tone = "mid"
+        first = (f"<b>{name} missed CMS's quality performance standard for PY{py} but met the "
+                 f"alternative standard</b>, so it shares savings at a reduced rate scaled to its "
+                 f"quality score.")
+    elif state.get("Met_QPS") == "No":
+        tone = "bad"
+        first = (f"<b>{name} missed both CMS's quality performance standard and the alternative "
+                 f"standard for PY{py}</b>, so it is not eligible to share in savings.")
+    else:
+        tone = "neut"
+        first = f"CMS did not publish whether {name} met the quality performance standard for PY{py}."
+
+    where = ""
+    if len(domains) >= 2:
+        weak, strong = domains[0], domains[-1]
+        where = (f"weakest in {weak['domain'].lower()} (p{weak['avg_performance_pct']:.0f}) and "
+                 f"strongest in {strong['domain'].lower()} (p{strong['avg_performance_pct']:.0f})")
+    p = score.get("performance_pct") if score else None
+    if euc and where:
+        second = (f"Because that score is a floor, its own measure results say more: against "
+                  f"{group} they are {where}.")
+    elif euc:
+        second = "That score is a floor rather than a measured result, and no measure results were reported."
+    elif p is not None:
+        second = (f"Its composite score of {fmt(score['value'], '%')} is "
+                  f"{perf_word(p, True).lower()} (p{p:.0f}) against {group}"
+                  f"{'; it is ' + where if where else ''}.")
+    else:
+        second = ""
+    return f'<div class="takeaway t-{tone}">{first} {second}</div>'
+
+
+# (label, flag key, indented under the row above, bold, a pass/fail gate rather than a fact)
+QUALITY_DETERMINATION = [
+    ("Met Shared Savings Program quality reporting requirements",
+     "Met_SSP_quality_reporting_requirements", False, False, True),
+    ("Reported via CMS Web Interface", "Report_WI", True, False, False),
+    ("Reported via eCQM / MIPS CQM / Medicare CQM", "Report_eCQM_CQM_MedicareCQM", True, False, False),
+    ("Affected by extreme and uncontrollable circumstances (score set to at least the 40th "
+     "percentile)", "Recvd40p", False, False, False),
+    ("ACO met the Quality Performance Standard", "Met_QPS", False, True, True),
+    ("Pathway: quality score at or above the 40th-percentile MIPS score", "Met_40pctl", True, False, True),
+    ("Pathway: met the eCQM / MIPS CQM reporting incentive", "Met_Incentive", True, False, True),
+    ("Pathway: first-year ACO that met the reporting requirements", "Met_FirstYear", True, False, True),
+    ("ACO met the Alternative Quality Performance Standard", "Met_AltQPS", False, True, True),
+]
+
+
+def yes_no(state, gate: bool = True) -> str:
+    """Yes/No pill: green/red for pass/fail gates, gray for plain facts and N/A."""
+    shown = state if state in ("Yes", "No") else "N/A"
+    tier = {"Yes": "good", "No": "bad"}.get(shown, "neut") if gate else "neut"
+    return f'<span class="k-word t-{tier}">{shown}</span>'
+
+
+def determination_table(score_text: str, flags: dict) -> str:
+    """CMS Tables 1–2 layout: the quality score and each Yes/No gate behind the standard."""
+    rows = [f'<tr><td>Quality score</td><td class="val">{score_text}</td></tr>']
+    # One pathway is enough, so a pathway's "No" only counts against an ACO that missed the standard.
+    met_qps = flags.get("Met_QPS", {}).get("state") == "Yes"
+    for label, key, indent, bold, gate in QUALITY_DETERMINATION:
+        f = flags.get(key)
+        if met_qps and label.startswith("Pathway:"):
+            gate = f is not None and f["state"] == "Yes"
+        text = f"<b>{html.escape(label)}</b>" if bold else html.escape(label)
+        rows.append(f'<tr><td class="{"ind" if indent else ""}" '
+                    f'title="{html.escape(f["description"]) if f else ""}">{text}</td>'
+                    f'<td class="val">{yes_no(f["state"] if f else None, gate)}</td></tr>')
+    rows.append('<tr><td>Population and income adjustment bonus points</td>'
+                '<td class="val muted">Not in the public CMS file</td></tr>')
+    return (f'<table class="bm det"><thead><tr><th class="txt">Quality determination</th>'
+            f'<th>Result</th></tr></thead><tbody>{"".join(rows)}</tbody></table>')
+
+
+def measure_table(items: list[dict], title: str, subtitle: str, group: str,
+                  with_collection: bool) -> str:
+    """CMS Table 3 / Table 5 layout: measure #, title, rate, SSP ACO mean, plus our rating."""
+    def order(m):
+        mid = m["measure_id"]
+        return (1, int(mid[6:])) if mid.startswith("CAHPS-") else (0, int(mid))
+
+    head = ('<tr><th class="txt">#</th><th class="txt">Measure</th>'
+            + ('<th class="txt">Reported via</th>' if with_collection else '')
+            + '<th>Rate</th><th>SSP ACO mean</th><th style="text-align:center">'
+            + f'{html.escape(title)}<br><span style="font-weight:400">{html.escape(subtitle)}</span>'
+            + '</th></tr>')
+    rows = []
+    for m in sorted(items, key=order):
+        tags = (["Outcome"] if m["outcome"] else []) + (
+            ["lower is better"] if m["higher_is_better"] is False else [])
+        label = m["label"].removeprefix("CAHPS: ")
+        rows.append(f'<tr><td>{m["measure_id"]}</td>{name_cell(label, tags, m["description"])}'
+                    + (f'<td class="txt">{m["collection"]}</td>' if with_collection else '')
+                    + f'<td class="val">{fmt(m["value"], "measure")}</td>'
+                    + f'<td class="val">{fmt(m["aco_mean"], "measure")}</td>'
+                    + pct_cell(m, "measure", m["higher_is_better"], group) + '</tr>')
+    return (f'<table class="bm cms"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
+            .replace("$", "&#36;"))
 
 
 def headline_boxes(rep: dict, pick: str, savings: dict | None) -> str:
@@ -619,17 +747,17 @@ with tabs[1]:
             qfl = flags_by_key(qp["aco"].get("quality_flags"))
             # The gates matter more to the economics than the score does.
             st.markdown(quality_boxes(rep, pick, qfl), unsafe_allow_html=True)
+            qs = rep["metrics"]["quality_score"]
+            qs_c = qs["comparisons"].get(pick)
+            st.markdown(quality_takeaway(
+                a["aco_name"], py, qfl, {**qs_c, "value": qs["value"]} if qs_c else {},
+                group_label(pick, qs_c["cohort_value"]) if qs_c else "its peers",
+                qp["domain_summary"]), unsafe_allow_html=True)
             m2, m3, m4 = st.columns(3)
             m2.metric("Measures reported", len(qp["measures"]))
             m3.metric("Below cohort median", len([x for x in qp["measures"]
                                                   if x["performance_pct"] < 50]))
             m4.metric("Peer cohort size", c["n_peers"])
-            if qfl.get("Met_QPS", {}).get("value") == 0:
-                st.markdown('<div class="warnbox">This ACO missed the primary quality gate. '
-                            'Its sharing rate is reduced regardless of where individual measures '
-                            'rank — PY2024 median final share rate was 30.6% for ACOs in this '
-                            'position versus 50.0% for those that cleared it.</div>',
-                            unsafe_allow_html=True)
             if c["small_sample"]:
                 st.markdown('<div class="warnbox">Small peer cohort — treat these '
                             'comparisons as directional.</div>', unsafe_allow_html=True)
@@ -637,11 +765,11 @@ with tabs[1]:
             title, subtitle = cohort_header(c)
             group = cohort_text(c)
 
-            def measure_rows(items: list[dict], with_domain: bool = False) -> list[str]:
+            def measure_rows(items: list[dict]) -> list[str]:
                 return [table_row(
                     name_cell(mm["label"],
                               ["lower is better"] if mm["higher_is_better"] is False else [],
-                              mm["description"], mm["domain"] if with_domain else ""),
+                              mm["description"]),
                     fmt(mm["value"], "measure"),
                     pct_cell(mm, "measure", mm["higher_is_better"], group)) for mm in items]
 
@@ -663,15 +791,38 @@ with tabs[1]:
                 for d in qp["domain_summary"]],
                 "Domain", "Measures"), unsafe_allow_html=True)
 
-            st.markdown("##### All measures")
-            st.markdown(rank_table(title, subtitle, measure_rows(qp["measures"], with_domain=True),
-                                   "Measure"), unsafe_allow_html=True)
+            st.markdown("##### Quality determination")
+            st.caption("Laid out like Tables 1–2 of CMS's Quality Performance Report. "
+                       "Hover a row for what it means.")
+            st.markdown(determination_table(fmt(qs["value"], "%"), qfl), unsafe_allow_html=True)
+
+            measures = [mm for mm in qp["measures"] if not mm["measure_id"].startswith("CAHPS")]
+            cahps = [mm for mm in qp["measures"] if mm["measure_id"].startswith("CAHPS")]
+            st.markdown("##### Measure results")
+            st.caption("Laid out like CMS Table 3. SSP ACO mean is the average rate of every ACO "
+                       "reporting the measure this year. Outcome measures are the ones the "
+                       "alternative quality standard is judged on.")
+            st.markdown(measure_table(measures, title, subtitle, group, with_collection=True),
+                        unsafe_allow_html=True)
+            if cahps:
+                st.markdown("##### CAHPS for MIPS survey")
+                st.caption("Laid out like CMS Table 5: patient-experience summary survey measures.")
+                st.markdown(measure_table(cahps, title, subtitle, group, with_collection=False),
+                            unsafe_allow_html=True)
             st.markdown(TABLE_LEGEND, unsafe_allow_html=True)
+            st.caption("Not in the public CMS file, so not shown: numerators and denominators, MIPS "
+                       "benchmarks and deciles, data completeness, measure-level detail of the "
+                       "eCQM / MIPS CQM incentive (CMS Table 4), and population and income bonus "
+                       "points (CMS Tables 6–7).")
             rows = [{
+                "Measure #": mm["measure_id"],
                 "Measure": mm["label"],
                 "Domain": mm["domain"],
+                "Reported via": mm["collection"],
+                "Outcome measure": "Yes" if mm["outcome"] else "No",
                 "Direction": "lower is better" if mm["higher_is_better"] is False else "higher is better",
                 "This ACO": round(mm["value"], 2),
+                "SSP ACO mean": round(mm["aco_mean"], 2),
                 "Cohort p25": round(mm["cohort_p25"], 2),
                 "Median": round(mm["cohort_p50"], 2),
                 "Cohort p75": round(mm["cohort_p75"], 2),
