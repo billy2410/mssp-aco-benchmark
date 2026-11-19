@@ -14,6 +14,7 @@ Environment (or .streamlit/secrets.toml):
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 from pathlib import Path
@@ -51,6 +52,18 @@ st.markdown("""
   .warnbox{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#92400e}
   .okbox{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#065f46}
   [data-testid="stTooltipContent"]{max-height:75vh}
+  table.bm{width:100%;max-width:780px;border-collapse:separate;border-spacing:0 3px;font-size:.9rem;border:none}
+  table.bm th,table.bm td{border:none;padding:7px 12px}
+  table.bm th{font-size:.78rem;font-weight:600;color:#64748b;text-align:right;vertical-align:bottom}
+  table.bm th:first-child,table.bm td:first-child{text-align:left}
+  table.bm td.val{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.bm td.pct{text-align:center;width:160px;color:#fff;font-weight:700;border-radius:4px;cursor:help}
+  @media (max-width:640px){table.bm td.pct{width:64px} table.bm th,table.bm td{padding:6px 6px}}
+  table.bm td.t-good{background:#15803d} table.bm td.t-mid{background:#d97706}
+  table.bm td.t-bad{background:#dc2626} table.bm td.t-neut{background:#64748b}
+  table.bm .tag{font-size:.68rem;font-weight:600;border:1px solid #94a3b8;border-radius:4px;
+    padding:0 4px;margin-left:6px;color:#64748b}
+  .legend span{display:inline-block;width:11px;height:11px;border-radius:2px;margin:0 4px -1px 10px}
 </style>
 """, unsafe_allow_html=True)
 
@@ -107,14 +120,20 @@ def fmt(v, unit):
     return f"{v}"
 
 
+def perf_tier(p, higher_is_better) -> str:
+    """good / mid / bad by direction-adjusted percentile; neutral for two-sided or no data."""
+    if p is None or higher_is_better is None:
+        return "neut"
+    return "good" if p >= 75 else ("bad" if p <= 25 else "mid")
+
+
 def perf_pill(c: dict, higher_is_better) -> str:
     p = c.get("performance_pct")
     if p is None:
         return '<span class="pill p-neut">no data</span>'
     if higher_is_better is None:
         return f'<span class="pill p-neut">p{p:.0f} of cohort</span>'
-    cls = "p-good" if p >= 75 else ("p-bad" if p <= 25 else "p-mid")
-    return f'<span class="pill {cls}">{c["rank_label"]} · p{p:.0f}</span>'
+    return f'<span class="pill p-{perf_tier(p, higher_is_better)}">{c["rank_label"]} · p{p:.0f}</span>'
 
 
 COHORT_LABELS = {"track": "Track", "risk_model": "Risk model", "rev_cat": "Revenue category",
@@ -172,12 +191,13 @@ def cohort_radio(key: str, aco_id: str | None, py: int, tab_note: str) -> tuple[
         group = "" if value == base else f": {value}"
         return f"{base}{group} · {count(n)} ACOs ({count(n_vint)} same vintage)"
 
-    cohort = st.radio("Compare against", COHORT_CHOICES, format_func=label,
-                      horizontal=True, key=key, help=f"{COHORT_HELP}\n\n{tab_note}")
+    cohort = st.radio("Compare against", COHORT_CHOICES, format_func=label, horizontal=True,
+                      help=f"{COHORT_HELP}\n\n{tab_note}",
+                      **shared("cohort", key, COHORT_CHOICES))
     row = engine.get_aco(aco_id, py) if aco_id else None
     vintage = f" ({row['by3_vintage']})" if row and row.get("by3_vintage") else ""
-    vintage_only = st.toggle(f"Same BY3 vintage only{vintage}", key=f"{key}_vintage",
-                             help=VINTAGE_HELP)
+    vintage_only = st.toggle(f"Same BY3 vintage only{vintage}", help=VINTAGE_HELP,
+                             **shared("vintage", f"{key}_vintage"))
     return cohort, vintage_only
 
 
@@ -242,6 +262,52 @@ def metric_card(m: dict, preferred=None, focus=None, extra_badge: str = ""):
         st.caption(m["description"])
 
 
+def benchmark_table(rep: dict, keys: list[str], focus: str, sizes: dict,
+                    qps_state: str | None = None) -> str:
+    """One row per metric, one colored percentile column for the selected cohort."""
+    metrics = [(k, rep["metrics"][k]) for k in keys if k in rep["metrics"]]
+    pick = focus if any(focus in m["comparisons"] for _, m in metrics) else "all"
+    value, n, n_vint = sizes.get(pick, ("All ACOs", None, None))
+    base = COHORT_LABELS.get(pick, pick)
+    group = "" if value == base else f"{value} · "
+    count = (f"{n_vint} ACOs, same BY3 vintage" if rep.get("vintage_only") else f"{n} ACOs")
+    head = (f'<tr><th>Metric</th><th>Value</th><th style="text-align:center">{base}<br>'
+            f'<span style="font-weight:400">{html.escape(group)}{count}</span></th></tr>')
+
+    rows = []
+    for key, m in metrics:
+        label = html.escape(m["label"])
+        if m.get("vintage_sensitive"):
+            label += '<span class="tag">BY3</span>'
+        if key == "quality_score" and qps_state:
+            label += f'<span class="tag">QPS met: {html.escape(qps_state)}</span>'
+        name = f'<td title="{html.escape(m["description"])}">{label}</td>'
+        val = f'<td class="val">{fmt(m["value"], m["unit"])}</td>'
+        c = m["comparisons"].get(pick)
+        if m.get("unavailable") or not c or c.get("performance_pct") is None:
+            note = m.get("unavailable") or "No comparison available"
+            rows.append(f'<tr>{name}{val}<td class="pct t-neut" title="{html.escape(note)}">'
+                        f'n/a</td></tr>')
+            continue
+        p = c["performance_pct"]
+        tip = [f'{base}: {c["cohort_value"]}'
+               f'{", same BY3 vintage" if c.get("same_vintage") else ""} (n={c["cohort_n"]})',
+               f'Median: {fmt(c.get("cohort_p50"), m["unit"])}',
+               f'Middle 50%: {fmt(c.get("cohort_p25"), m["unit"])} – '
+               f'{fmt(c.get("cohort_p75"), m["unit"])}']
+        if m["higher_is_better"] is None:
+            tip.append("Two-sided: ranked, not scored good or bad")
+        if c.get("small_sample"):
+            tip.append(f"Fewer than {engine.MIN_REGIONAL_N} ACOs: directional only")
+        tier = perf_tier(p, m["higher_is_better"])
+        flag = " !" if c.get("small_sample") else ""
+        rows.append(f'<tr>{name}{val}<td class="pct t-{tier}" '
+                    f'title="{"&#10;".join(html.escape(t) for t in tip)}">p{p:.0f}{flag}</td></tr>')
+    # &#36; keeps dollar values out of Streamlit's $...$ math rendering, attributes included.
+    return (f'<table class="bm"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
+            .replace("$", "&#36;"))
+
+
 # ---------------------------------------------------------------- header
 st.title("ACO Benchmark")
 _meta = engine.meta()
@@ -253,7 +319,7 @@ st.caption(f"Medicare Shared Savings Program performance and quality benchmarkin
 # the running instance is serving stale data files.
 st.caption(f"Data build: {build}")
 
-tabs = st.tabs(["🔎 ACO Lookup", "🩺 Quality Performance", "💵 Medical Expense Performance",
+tabs = st.tabs(["🔎 ACO Performance", "🩺 Quality Performance", "💵 Medical Expense Performance",
                 "📐 Benchmark My Numbers", "💬 Ask the Data", "📖 Methodology"])
 
 FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final_adj",
@@ -263,23 +329,45 @@ FIN_ORDER = ["savings_rate", "risk_ratio_by3_py", "expense_trend_by3_py", "final
              "reg_adj", "prior_sav_adj", "pct_dual", "pct_lti"]
 
 
+SHARED_DEFAULTS = {"q": "", "py": 2024, "cohort": "track", "vintage": False}
+
+
+def _remember(field: str, key: str, options: list | None):
+    # A radio on a hidden tab can report a stale option label as a change when the
+    # labels' counts update; only real options may become the shared selection.
+    value = st.session_state[key]
+    if options is None or value in options:
+        st.session_state[f"shared_{field}"] = value
+
+
+def shared(field: str, key: str, options: list | None = None) -> dict:
+    """Widget kwargs that keep this control in step with its twins on the other ACO tabs."""
+    # Re-applied every run so each tab's control always displays the value in use.
+    value = st.session_state.get(f"shared_{field}", SHARED_DEFAULTS.get(field))
+    if value is not None and (options is None or value in options):
+        st.session_state[key] = value
+    return {"key": key, "on_change": _remember, "args": (field, key, options)}
+
+
 def aco_picker(key: str):
     c1, c2 = st.columns([3, 1])
     with c1:
         q = st.text_input("ACO name", placeholder="e.g. Aledade Delaware, Privia, Hackensack",
-                          key=f"q_{key}")
+                          **shared("q", f"q_{key}"))
     with c2:
-        py = st.selectbox("Performance year", [2024, 2023], key=f"py_{key}")
+        years = [2024, 2023]
+        py = st.selectbox("Performance year", years, **shared("py", f"py_{key}", years))
     if not q:
         return None, py
     hits = engine.find_acos(q, performance_year=py, limit=12)
     if not hits:
         st.warning("No ACO matches that name.")
         return None, py
-    opts = {f'{h["aco_name"]} · {h["aco_id"]} · {int(h["n_beneficiaries"] or 0):,} lives': h["aco_id"]
-            for h in hits}
-    label = st.selectbox(f"{len(hits)} matches", list(opts), key=f"sel_{key}")
-    return opts[label], py
+    names = {h["aco_id"]: f'{h["aco_name"]} · {h["aco_id"]} · {int(h["n_beneficiaries"] or 0):,} lives'
+             for h in hits}
+    aco_id = st.selectbox(f"{len(hits)} matches", list(names), format_func=names.get,
+                          **shared("sel", f"sel_{key}", list(names)))
+    return aco_id, py
 
 
 # ================================================================ TAB 1
@@ -287,8 +375,8 @@ with tabs[0]:
     aco_id, py = aco_picker("lookup")
     focus, vint_l = cohort_radio(
         "lookup_cohort", aco_id, py,
-        "This sets which group the cards and narrative lead with. Every group is still "
-        f"shown under 'Cohort detail'. {BY3_NOTE}")
+        "This sets which group the table and narrative compare against. "
+        f"{BY3_NOTE}")
     if aco_id:
         rep = engine.benchmark_aco(aco_id, performance_year=py, vintage_only=vint_l)
         a = rep["aco"]
@@ -308,27 +396,19 @@ with tabs[0]:
         if a.get("final_adj_type"):
             st.caption(f"CMS applied: {a['final_adj_type']}")
 
-        sel = rep["metrics"].get(focus)  # noqa: F841 (focus is a cohort key, not a metric)
-        st.markdown("#### Headline actuarial KPIs")
-        cols = st.columns(4)
-        for i, k in enumerate(["savings_rate", "risk_ratio_by3_py",
-                               "expense_trend_by3_py", "final_adj"]):
-            with cols[i]:
-                metric_card(rep["metrics"][k], focus=focus)
-
-        st.markdown("#### All metrics")
-        rest = [k for k in FIN_ORDER if k in rep["metrics"]][4:]
-        cols = st.columns(3)
-        for i, k in enumerate(rest):
-            with cols[i % 3]:
-                # Quality score carries its gate flag — the score alone misleads.
-                badge = ""
-                if k == "quality_score" and fl.get("Met_QPS"):
-                    q = fl["Met_QPS"]
-                    badge = (f'<span class="muted">Met Quality Performance Standard </span>'
-                             f'{flag_pill(q["state"])}')
-                metric_card(rep["metrics"][k], focus=focus, extra_badge=badge)
-                st.write("")
+        st.markdown("#### Financial benchmark")
+        qps = fl.get("Met_QPS", {}).get("state")
+        st.markdown(benchmark_table(rep, FIN_ORDER, focus, engine.cohort_sizes(aco_id, py), qps),
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="muted legend">Percentiles are direction-adjusted, so higher is always '
+            'better.<span style="background:#15803d"></span>Good (p75+)'
+            '<span style="background:#d97706"></span>Average'
+            '<span style="background:#dc2626"></span>Bad (p25 or below)'
+            '<span style="background:#64748b"></span>Two-sided or no data.'
+            ' Hover a cell for the group median and middle 50%; ! marks a group under '
+            f'{engine.MIN_REGIONAL_N} ACOs.</div>', unsafe_allow_html=True)
+        st.write("")
 
         with st.expander("Quality determination flags — what drove the sharing rate"):
             st.dataframe(pd.DataFrame([{
